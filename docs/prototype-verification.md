@@ -89,7 +89,7 @@ For manual accessibility, use a keyboard at 360 px and desktop widths and repeat
 | SAD and SADD component | Implemented component | Status |
 | --- | --- | --- |
 | React presentation | [Next.js page and components](../app/page.js) | React retained |
-| Spring API and service layer | [Next.js Server Actions](../app/actions.js) · [Authentication](../lib/auth.js) · [Events](../lib/events.js) | Runtime and interface deviation to record in SAD and SADD |
+| Spring API and service layer | [Spring Boot public catalog API](../backend/README.md#public-event-api) · [Next.js Server Actions](../app/actions.js) | Spring implements the public catalog in parallel. The deployed MVP still uses Next.js for all backend operations. |
 | PostgreSQL persistence and sessions | [Schema](../lib/schema.sql) · [Connection pool](../lib/db.js) | PostgreSQL retained on Neon |
 | Notification outbox, worker, retries | Registration transaction writes simulated inbox records. [Event service](../lib/events.js) | Delivery design deviation to record |
 | Nginx and Docker Compose deployment | Vercel and Neon. [Deployment instructions](../README.md#deploy-to-vercel-and-neon) | Deployment deviation to record |

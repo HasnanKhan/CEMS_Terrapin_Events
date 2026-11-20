@@ -30,8 +30,8 @@ jobs:
           --health-retries 10
     env:
       CEMS_DB_URL: jdbc:postgresql://127.0.0.1:5432/terrapin_spring_test
-      CEMS_DB_USER: terrapin_runtime
-      CEMS_DB_PASSWORD: terrapin_runtime_test
+      CEMS_DB_USER: terrapin_catalog
+      CEMS_DB_PASSWORD: terrapin_catalog_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,8 +48,8 @@ jobs:
         run: |
           {
             cat lib/schema.sql
-            printf "\nCREATE ROLE terrapin_runtime LOGIN PASSWORD 'terrapin_runtime_test';\n"
-            cat lib/runtime-grants.sql
+            printf "\nCREATE ROLE terrapin_catalog LOGIN PASSWORD 'terrapin_catalog_test';\n"
+            cat backend/sql/catalog-grants.sql backend/src/test/resources/catalog-fixtures.sql
           } | docker exec -i "$POSTGRES_CONTAINER" psql -U terrapin -d terrapin_spring_test -v ON_ERROR_STOP=1
       - name: Verify Spring Boot
         working-directory: backend
