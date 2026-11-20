@@ -22,6 +22,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
   const password = 'TestPassword2026'
   const email = number => `test-${marker}-${number}@umd.edu`
   const ownerIds = []
+  const queueEventIds = []
   const subjects = [tokenHash(ip)]
   let organizer
   let administrator
@@ -49,6 +50,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
         await query('delete from registrations where event_id=$1', [eventId])
         await query('delete from events where id=$1', [eventId])
       }
+      await query('delete from events where id=any($1::int[])', [queueEventIds])
       await query('delete from audit_entries where actor_id=any($1::int[]) or source_ip=$2', [ownerIds, ip])
       await query('delete from accounts where id=any($1::int[]) or email=$2', [ownerIds, email(0)])
       await query('delete from rate_limits where subject=any($1::text[])', [subjects])
@@ -186,6 +188,43 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       assert.equal(rows.length, 1)
       assert.equal(rows[0].description, 'Updated description')
       assert.ok((await events.organizerEvents(organizer)).rows.some(row => row.id === eventId))
+    })
+
+    await t.test('FR-14–15 cap concurrent submissions and order and filter the approval queue', async () => {
+      const ownerA = await account(6, ['attendee', 'organizer'])
+      const ownerB = await account(7, ['attendee', 'organizer'])
+      const date = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10)
+      const venue = (await events.venues()).rows.find(row => row.name === 'Iribe Center')
+      const details = {
+        description: 'Approval queue verification', category: 'Academic', host: 'Sample organization',
+        venue: String(venue.id), capacity: '1', starts: date + 'T17:00', ends: date + 'T18:00', deadline: date + 'T16:00'
+      }
+
+      async function draft(owner, sequence) {
+        const id = await events.saveDraft(owner, null, form({ ...details, title: `Queue ${marker} ${sequence}` }))
+        queueEventIds.push(id)
+        return id
+      }
+      const drafts = await Promise.all(Array.from({ length: 6 }, (_, index) => draft(ownerA, index)))
+      const submissions = await Promise.allSettled(drafts.map(id => events.changeEvent(ownerA, id, 'submit', form({}))))
+      const admitted = drafts.filter((id, index) => submissions[index].status === 'fulfilled')
+      const rejected = submissions.filter(item => item.status === 'rejected')
+      assert.equal(admitted.length, 5)
+      assert.equal(rejected.length, 1)
+      assert.match(rejected[0].reason.message, /five events awaiting approval/)
+      const rejectedId = drafts[submissions.findIndex(item => item.status === 'rejected')]
+      assert.equal((await events.getEvent(rejectedId, ownerA)).status, 'draft')
+
+      const other = await draft(ownerB, 'other')
+      await events.changeEvent(ownerB, other, 'submit', form({}))
+      const expected = [admitted[2], admitted[1], other, admitted[4], admitted[0], admitted[3]]
+      await query(`update events e
+        set submitted_at=now() - interval '1 hour' + item.position * interval '1 second'
+        from unnest($1::int[]) with ordinality item(id,position) where e.id=item.id`, [expected])
+      const filtered = (await events.approvalQueue(ownerA.id)).rows.map(event => event.id)
+      assert.deepEqual(filtered, expected.filter(id => id !== other))
+      const queue = (await events.approvalQueue(null)).rows.map(event => event.id)
+      assert.deepEqual(queue.filter(id => queueEventIds.includes(id)), expected)
     })
 
     await t.test('FR-26–35, FR-37, FR-39–40 and FR-45 keep seats and inbox records consistent', async () => {
