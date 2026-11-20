@@ -63,7 +63,7 @@ The app records sign-ins, account lockouts, authorization denials, rate-limit de
 
 ## Registration consistency
 
-Every registration, cancellation, and published capacity change locks the relevant event row in PostgreSQL before counting seats or changing the roster. A unique constraint prevents multiple active entries for the same user and event. Confirmed seat changes, FIFO promotion, and related inbox entries commit together. Session tokens are stored as hashes and expire after 30 minutes of inactivity.
+Every registration, cancellation, and published capacity change locks the relevant event row in PostgreSQL before counting seats or changing the roster. A unique constraint prevents multiple active entries for the same user and event. Confirmed seat changes, FIFO promotion, and related inbox entries commit together. Session tokens are stored as hashes. Sessions expire after 30 minutes of inactivity or 12 hours after sign-in, whichever comes first. Existing sessions retain their current expiry when the cap is first deployed. Apply the schema with `npm run db:setup` before deploying the session policy.
 
 ## Prototype verification
 

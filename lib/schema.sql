@@ -13,6 +13,11 @@ create table if not exists sessions (
   account_id integer not null references accounts(id) on delete cascade,
   expires_at timestamptz not null
 );
+-- Existing sessions keep their current deadline. Only newly issued sessions get 12 hours.
+alter table sessions add column if not exists absolute_expires_at timestamptz;
+update sessions set absolute_expires_at=expires_at where absolute_expires_at is null;
+alter table sessions alter column absolute_expires_at set default (now()+interval '12 hours');
+alter table sessions alter column absolute_expires_at set not null;
 create index if not exists sessions_expiry on sessions(expires_at);
 create table if not exists venues (
   id integer generated always as identity primary key,
