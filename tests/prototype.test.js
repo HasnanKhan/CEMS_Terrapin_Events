@@ -77,9 +77,17 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
         await assert.rejects(auth.authenticate(credentials(email(0), 'wrongPassword1'), false), /incorrect/)
       }
       await assert.rejects(auth.authenticate(credentials(email(0)), false), /temporarily locked/)
+      const { rows: [lock] } = await query(`select extract(epoch from a.locked_until-l.created_at)::int as seconds
+        from accounts a join audit_entries l on l.actor_id=a.id and l.action='account_lockout'
+        where a.id=$1`, [created.id])
+      assert.equal(lock.seconds, 15 * 60)
       await query("update accounts set locked_until=now()-interval '1 second' where id=$1", [created.id])
       await assert.rejects(auth.authenticate(credentials(email(0), 'wrongPassword1'), false), /incorrect/)
       await auth.authenticate(credentials(email(0)), false)
+      const { rows: [session] } = await query(`select extract(epoch from s.expires_at-a.created_at)::int as seconds
+        from sessions s join audit_entries a on a.actor_id=s.account_id and a.action='login' and a.outcome='success'
+        where s.account_id=$1`, [created.id])
+      assert.equal(session.seconds, 30 * 60)
       assert.equal((await auth.currentUser()).id, created.id)
       const cookie = cookies().get('terrapin_session')
       assert.equal(cookie.httpOnly, true)
@@ -164,9 +172,16 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       await assert.rejects(events.saveDraft(organizer, null, form({ ...details, starts: 'bad-date' })), /dates and times/)
       await assert.rejects(events.saveDraft(organizer, null, form({ ...details, capacity: '999' })), /selected venue/)
       await assert.rejects(events.saveDraft(organizer, null, form({ ...details, deadline: date + 'T18:30' })), /Eastern times/)
+      await assert.rejects(events.saveDraft(organizer, null, form({ ...details, ends: details.starts })), /Eastern times/)
+      await assert.rejects(events.saveDraft(organizer, null, form({
+        ...details, starts: '2000-01-01T17:00', ends: '2000-01-01T18:00', deadline: '2000-01-01T16:00'
+      })), /Eastern times/)
+      await assert.rejects(events.saveDraft(organizer, null, form({ ...details, capacity: '0' })), /positive whole number/)
+      await assert.rejects(events.saveDraft(organizer, null, form({ ...details, capacity: '1.5' })), /positive whole number/)
       eventId = await events.saveDraft(organizer, null, form(details))
       assert.equal(await events.getEvent(eventId, null), null)
       assert.equal((await events.getEvent(eventId, organizer)).status, 'draft')
+      await assert.rejects(events.changeRegistration(organizer, eventId, false), /Registration is closed/)
       assert.equal(await events.getEvent(eventId, administrator), null)
       assert.deepEqual(await events.roster(eventId, administrator), {
         event: { id: eventId, title: details.title, status: 'draft', starts_at: (await events.getEvent(eventId, organizer)).starts_at },
@@ -183,6 +198,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       assert.ok((await events.approvalQueue(organizer.id)).rows.some(row => row.id === eventId))
       assert.equal((await events.getEvent(eventId, administrator)).status, 'pending')
       assert.equal((await events.roster(eventId, administrator)).event.status, 'pending')
+      await assert.rejects(events.changeRegistration(organizer, eventId, false), /Registration is closed/)
       await events.changeEvent(administrator, eventId, 'approve', form({}))
       const { rows } = await events.publicEvents({ keyword: marker.toUpperCase(), category: 'Academic', venue: venue.id, page: 1 })
       assert.equal(rows.length, 1)
@@ -241,21 +257,33 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       const waiting = []
       for (const user of users) {
         const { rows: [entry] } = await events.registration(user, eventId)
+        assert.ok(entry.created_at instanceof Date)
         if (entry.position) waiting[entry.position - 1] = user
       }
       await assert.rejects(events.changeRegistration(confirmed, eventId, false), /already have/)
+      await assert.rejects(events.changeRegistration(waiting[0], eventId, false), /already have/)
       await assert.rejects(events.changeEvent(organizer, eventId, 'capacity', form({ capacity: '999' })), /fit the venue/)
       await events.changeRegistration(confirmed, eventId, true)
       assert.equal((await events.registrations(waiting[0])).rows[0].status, 'confirmed')
       assert.equal((await events.registration(waiting[1], eventId)).rows[0].position, 1)
       await events.changeEvent(organizer, eventId, 'capacity', form({ capacity: '2' }))
       assert.equal((await events.registration(waiting[1], eventId)).rows[0].status, 'confirmed')
+      await assert.rejects(events.changeEvent(organizer, eventId, 'capacity', form({ capacity: '1' })), /cover all confirmed/)
+      assert.equal((await events.getEvent(eventId, organizer)).capacity, 2)
       const { rows } = await query('select kind,account_id from notifications where event_id=$1 order by id', [eventId])
       assert.equal(rows.filter(row => row.kind === 'confirmed').length, 1)
       assert.equal(rows.filter(row => row.kind === 'waitlisted').length, 2)
       assert.deepEqual(rows.filter(row => row.kind === 'promoted').map(row => row.account_id), waiting.map(user => user.id))
+      await events.changeRegistration(confirmed, eventId, false)
+      assert.equal((await events.registration(confirmed, eventId)).rows[0].status, 'waitlisted')
+      await events.changeRegistration(confirmed, eventId, true)
+      assert.equal((await events.registration(confirmed, eventId)).rowCount, 0)
+      assert.equal((await events.getEvent(eventId, organizer)).confirmed, 2)
       await query("update events set deadline=now()-interval '1 second' where id=$1", [eventId])
       await assert.rejects(events.changeRegistration(confirmed, eventId, false), /closed/)
+      await query("update events set starts_at=now()-interval '1 second' where id=$1", [eventId])
+      await assert.rejects(events.changeRegistration(waiting[0], eventId, true), /already started/)
+      assert.equal((await events.registration(waiting[0], eventId)).rows[0].status, 'confirmed')
     })
   })
 })

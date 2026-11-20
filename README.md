@@ -70,7 +70,7 @@ Integration tests skip when `TEST_DATABASE_URL` is absent and reject remote host
 
 The [verification record](docs/prototype-verification.md) links prototype requirements to their evidence, lists open acceptance checks, and maps the documented design to the implemented components.
 
-GitHub Actions runs the backend tests and the coverage gate against a disposable PostgreSQL service, builds the app, and runs the Chromium workflow. The browser test covers draft approval, guest visibility, signup and return-to-event navigation, waitlist promotion, inbox delivery, and a 360 px event page. To run it locally, keep `TEST_DATABASE_URL` pointed at a dedicated localhost test database. The browser suite creates temporary demo accounts and events in that database.
+GitHub Actions checks the dependency audit, runs the backend tests and coverage gate against a disposable PostgreSQL service, builds the app, and runs Chromium. Failed browser runs keep their traces for seven days. Named behavior specs cover input validation and PostgreSQL business rules. Chromium covers draft approval, signup, waitlist promotion, role changes in an active session, and deactivation. Axe checks public pages at 360 px and 1280 px. Manual accessibility review still applies. To run it locally, keep `TEST_DATABASE_URL` pointed at a dedicated localhost test database. The browser suite creates temporary demo accounts and events in that database.
 
 ```sh
 npx playwright install chromium

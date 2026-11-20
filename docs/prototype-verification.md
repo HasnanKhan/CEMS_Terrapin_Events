@@ -19,12 +19,12 @@ Test links identify where the evidence lives. **Partial evidence** means the tes
 | --- | --- | --- |
 | FR-1 | Browser signup with name, email, and password. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
 | FR-2 | Invalid domain and duplicate email are rejected with a reason. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-3 | A weak password is rejected and a conforming password works. [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for all password-rule boundaries |
+| FR-3 | Password-rule boundaries and signup rejection are tested. [Validation specs](../tests/input.test.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-4 | Incorrect login fails and correct login creates a readable session. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-5 | Five failed attempts lock the account. An expired lock permits another attempt. [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for the exact 15-minute duration |
-| FR-6 | Sign-out and simulated expiry invalidate sessions. [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for the exact 30-minute inactivity interval |
+| FR-5 | Five failed attempts set a 15-minute lock. An expired lock permits another attempt. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-6 | Sessions start with a 30-minute idle expiry. Sign-out and simulated expiry invalidate them. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-7 | New accounts receive only the Attendee role. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-8 | System administrator grants Organizer access and deactivates and reactivates the account. [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for all grant and removal combinations |
+| FR-8 | Grant and removal of Organizer access take effect in an active session. Deactivation invalidates the session, and reactivation is tested. [Browser access specs](../tests/browser/account-access.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for all role combinations |
 | FR-9 | Role denial, organizer ownership, and guest and attendee roster restrictions are exercised. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for every protected operation |
 | FR-11 | Organizer creates a draft with the required event fields. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
 | FR-12 | Missing title, invalid date, excessive venue capacity, and deadline after start are rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for all input boundaries |
@@ -37,13 +37,13 @@ Test links identify where the evidence lives. **Partial evidence** means the tes
 | FR-25 | Draft is hidden from a guest and the published event appears in public search. [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for the visibility matrix. Completed and Cancelled lifecycle transitions are outside this prototype. |
 | FR-26 | An attendee confirms a seat for a published event before its deadline. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
 | FR-27 | Concurrent registration for one seat yields one confirmation and two waitlist entries. [PostgreSQL workflows](../tests/prototype.test.js) | Verified in the isolated concurrency case |
-| FR-28 | A duplicate confirmed registration is rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for duplicate waitlist behavior |
-| FR-29 | Full event accepts a waitlist entry. [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for the recorded join timestamp |
+| FR-28 | Duplicate confirmed and waitlist entries are rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-29 | Full event accepts a waitlist entry and stores each member’s join timestamp. [Chromium workflow](../tests/browser/mvp.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-30 | Waitlist positions are assigned and the next position updates after promotion. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-31 | Attendee cancels a confirmed seat before the event. [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for waitlist cancellation and cutoff |
+| FR-31 | Confirmed and waitlist cancellation work before the event. Cancellation after start is rejected. [Chromium workflow](../tests/browser/mvp.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-32 | Cancelling a confirmed seat promotes the first waitlisted attendee. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
-| FR-33 | Registration after the deadline is rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for all unpublished states |
-| FR-34 | Capacity increase promotes a waitlisted attendee and venue overflow is rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for reductions below confirmed count |
+| FR-33 | Registration after the deadline and for draft and pending events is rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified for the prototype states |
+| FR-34 | Capacity increase promotes a waitlisted attendee. Changes exceeding venue capacity or falling below the confirmed count are rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-35 | Administrator can open a draft, pending, or published roster. Organizers are restricted to their own events. Guests and other users are denied. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Verified for authorization and roster contents used by the test |
 | FR-37 | The registration query returns the current attendee's status. [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for the rendered My Events page |
 | FR-39 | Registration creates a confirmation entry. [PostgreSQL workflows](../tests/prototype.test.js) | Verified for simulated delivery |
@@ -71,7 +71,7 @@ Rejection, resubmission, published event cancellation and completion, month and 
 | NFR-12 | Dependency audit, browser isolation headers, and current role and input checks. | Run a passive application security scan and retain findings. Complete the defensive injection, XSS, and CSRF verification cases in an isolated environment. |
 | NFR-13 | Server actions delegate to authentication, event, and database modules. The regression suite covers the main workflows. | Record QA-07 change-isolation evidence and complete the design-to-code mapping for submission. |
 | NFR-14 | Browser automation demonstrates the happy path. | Time first-time student participants. At least 90% must find and register for the event within two minutes. |
-| NFR-15 | Chromium checks a 360 px event page. Automated checks ran on public screens and prompted a link-label fix. | Verify all screens manually with keyboard and assistive technology, review contrast, and record WCAG 2.1 AA results. |
+| NFR-15 | Chromium checks a 360 px event page. [Automated accessibility specs](../tests/browser/accessibility.spec.js) scan public pages at mobile and desktop widths. | Verify all screens manually with keyboard and assistive technology, review contrast, and record WCAG 2.1 AA results. |
 | NFR-16 | Vercel executes the stateless app. Sessions and request limits use PostgreSQL. | Measure scaling to 500 concurrent users if this optional target is pursued. |
 | NFR-17 | Roster access tests cover owning organizers and administrators, with guest and attendee denial. | Complete the field-level access matrix and approve data handling for any real-user pilot. |
 | NFR-18 | Tests verify the 20-login and 10-registration limits, concurrency, and rolling-window expiry. [Rate-limit tests](../tests/rate-limit.test.js) | Keep the trusted client IP regression in CI. |
