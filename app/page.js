@@ -97,7 +97,7 @@ async function Explore({ params }) {
             <p className="event-date">{dayText(event.starts_at)} · {timeText(event.starts_at)} ET</p>
             <h3><Link href={eventPath(event.id)}>{event.title}</Link></h3>
             <p className="event-location">{event.venue}</p>
-            <div className="card-footer"><SeatAvailability event={event} /><Link href={eventPath(event.id)} aria-label={'View ' + event.title}>View event</Link></div>
+            <div className="card-footer"><SeatAvailability event={event} /><Link href={eventPath(event.id)} aria-label={'View event: ' + event.title}>View event</Link></div>
           </div>
         </article>)}</div>
         : filtered || page > 1
