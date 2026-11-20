@@ -24,3 +24,11 @@ for (const width of [360, 1280]) {
     }
   })
 }
+
+test('the keyboard skip link moves focus to the main content', async ({ page }) => {
+  await page.goto('/')
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('link', { name: 'Skip to content', exact: true })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('main')).toBeFocused()
+})

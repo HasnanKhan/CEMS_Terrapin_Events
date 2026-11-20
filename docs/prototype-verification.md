@@ -40,12 +40,12 @@ Test links identify where the evidence lives. **Partial evidence** means the tes
 | FR-28 | Duplicate confirmed and waitlist entries are rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-29 | Full event accepts a waitlist entry and stores each member’s join timestamp. [Chromium workflow](../tests/browser/mvp.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-30 | Waitlist positions are assigned and the next position updates after promotion. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-31 | Confirmed and waitlist cancellation work before the event. Cancellation after start is rejected. [Chromium workflow](../tests/browser/mvp.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-31 | Confirmed and waitlist cancellation work before the event. Browser coverage checks explicit confirmation, cancellation after registration closes, and the disabled action on past events. [Chromium workflow](../tests/browser/mvp.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-32 | Cancelling a confirmed seat promotes the first waitlisted attendee. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
 | FR-33 | Registration after the deadline and for draft and pending events is rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified for the prototype states |
 | FR-34 | Capacity increase promotes a waitlisted attendee. Changes exceeding venue capacity or falling below the confirmed count are rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-35 | Administrator can open a draft, pending, or published roster. Organizers are restricted to their own events. Guests and other users are denied. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Verified for authorization and roster contents used by the test |
-| FR-37 | The registration query returns the current attendee's status. [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for the rendered My Events page |
+| FR-37 | My Events shows current status and waitlist position, groups past events, and explains the cancellation cutoff. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified for the browser scenarios |
 | FR-39 | Registration creates a confirmation entry. [PostgreSQL workflows](../tests/prototype.test.js) | Verified for simulated delivery |
 | FR-40 | Joining and promotion create inbox entries. The promotion is visible in Chromium. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for the exact join message contents |
 | FR-45 | Promotion appears in the recipient's inbox. The database records recipient, type, creation time, and delivery time. [Schema](../lib/schema.sql) · [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for timestamps and inbox isolation |
@@ -70,12 +70,18 @@ Rejection, resubmission, published event cancellation and completion, month and 
 | NFR-11 | Audited denials and insert-only audit grants for the restricted runtime role are covered by PostgreSQL tests. | Verify the production credential cutover and all access denials and record the one-year retention and restore procedure. |
 | NFR-12 | Dependency audit, browser isolation headers, and current role and input checks. | Run a passive application security scan and retain findings. Complete the defensive injection, XSS, and CSRF verification cases in an isolated environment. |
 | NFR-13 | Server actions delegate to authentication, event, and database modules. The regression suite covers the main workflows. | Record QA-07 change-isolation evidence and complete the design-to-code mapping for submission. |
-| NFR-14 | Browser automation demonstrates the happy path. | Time first-time student participants. At least 90% must find and register for the event within two minutes. |
-| NFR-15 | Chromium checks a 360 px event page. [Automated accessibility specs](../tests/browser/accessibility.spec.js) scan public pages at mobile and desktop widths. | Verify all screens manually with keyboard and assistive technology, review contrast, and record WCAG 2.1 AA results. |
+| NFR-14 | The browser suite exercises the registration path and status changes. | Run the participant protocol below. At least 90% must find and register for the event within two minutes. |
+| NFR-15 | Chromium checks a 360 px event page, keyboard skip navigation, and focus after server-side errors and cancellation. The [workflow spec](../tests/browser/mvp.spec.js) checks horizontal keyboard scrolling of a populated roster. [Automated accessibility specs](../tests/browser/accessibility.spec.js) scan public pages at mobile and desktop widths. | Verify all screens manually with keyboard and assistive technology, review contrast, and record WCAG 2.1 AA results. |
 | NFR-16 | Vercel executes the stateless app. Sessions and request limits use PostgreSQL. | Measure scaling to 500 concurrent users if this optional target is pursued. |
 | NFR-17 | Roster access tests cover owning organizers and administrators, with guest and attendee denial. | Complete the field-level access matrix and approve data handling for any real-user pilot. |
 | NFR-18 | Tests verify the 20-login and 10-registration limits, concurrency, and rolling-window expiry. [Rate-limit tests](../tests/rate-limit.test.js) | Keep the trusted client IP regression in CI. |
 | NFR-19 | CI enforces 80% statement coverage per backend file. This matrix identifies test links and remaining checks. | Finish the partial and open Must checks and attach the passing coverage and test reports for the submitted commit. |
+
+## Participant usability and manual accessibility
+
+Use consenting first-time student participants and fictional accounts in an isolated demo. Start each participant on Explore with a test account already signed in. Give one task: find the named event and register. Start timing when the task is given and stop when the participant reaches the confirmation. Record completion, elapsed seconds, and where they hesitated. Count all attempts when evaluating whether at least 90% completed in under two minutes.
+
+For manual accessibility, use a keyboard at 360 px and desktop widths and repeat key tasks with a screen reader. Check the skip link, registration and waitlist labels, approval form error focus, status announcements, and cancellation confirmation. Verify contrast and zoom on the homepage, attendee views, and admin views. Record the browser, assistive technology, and result for each check. Browser automation provides repeatable regression evidence. Participant timing and screen-reader observations are still open.
 
 ## Architecture conformance
 
