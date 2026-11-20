@@ -1,13 +1,27 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect, useRef } from 'react'
 import { submit } from './actions.js'
 
-export default function Form({ action, target = null, destination = '/', children, label, style = 'primary', compact = false }) {
+export function ActionNotice({ message }) {
+  const noticeRef = useRef(null)
+  useEffect(() => {
+    if (message) noticeRef.current?.focus()
+  }, [message])
+
+  return <p className="notice" role="status" tabIndex={-1} ref={noticeRef}>{message}</p>
+}
+
+export default function Form({ action, target = null, destination = '/', children, label, accessibleLabel, style = 'primary', compact = false }) {
   const [state, dispatch, pending] = useActionState(submit.bind(null, action, target, destination), {})
-  return <form action={dispatch} onReset={action === "save" ? event => event.preventDefault() : undefined} className={compact ? 'action compact' : 'action'}>
+  const errorRef = useRef(null)
+  useEffect(() => {
+    if (state?.error) errorRef.current?.focus()
+  }, [state])
+
+  return <form action={dispatch} data-action={action} onReset={action === "save" ? event => event.preventDefault() : undefined} className={compact ? 'action compact' : 'action'}>
     {children}
-    {state?.error && <p className="error" role="alert">{state.error}</p>}
-    <button className={'button ' + style} disabled={pending}>{pending ? 'Working…' : label}</button>
+    {state?.error && <p className="error" role="alert" tabIndex={-1} ref={errorRef}>{state.error}</p>}
+    <button className={'button ' + style} disabled={pending} aria-label={pending ? undefined : accessibleLabel}>{pending ? 'Working…' : label}</button>
   </form>
 }

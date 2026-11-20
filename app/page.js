@@ -3,7 +3,7 @@ import { audit, currentUser, extraRoles, selfSignupEnabled } from '../lib/auth.j
 import { query } from '../lib/db.js'
 import { approvalQueue, categories, eventsPerPage, getEvent, organizerEvents, publicEvents, registration, registrations, roster, rosterEvents, venues } from '../lib/events.js'
 import { optionalId } from '../lib/input.js'
-import Form from './form.js'
+import Form, { ActionNotice } from './form.js'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,9 +45,9 @@ function Empty({ title, children }) {
   return <div className="empty"><h3>{title}</h3>{children && <p>{children}</p>}</div>
 }
 
-function SeatAvailability({ event }) {
+function SeatAvailability({ event, now = new Date() }) {
   const seats = event.capacity - event.confirmed
-  if (event.deadline <= new Date()) return <span className="availability full">Registration closed</span>
+  if (event.deadline <= now) return <span className="availability full">Registration closed</span>
   return <span className={'availability ' + (seats ? 'open' : 'full')}>{seats ? `${seats} ${seats === 1 ? 'seat' : 'seats'} open` : 'Waitlist available'}</span>
 }
 
@@ -172,8 +172,10 @@ async function EventDetail({ id, user }) {
   const owner = has(user,'organizer') && user.id === event.owner_id
   const administrator = has(user,'administrator')
   const published = event.status === 'published'
-  const future = event.starts_at > new Date()
-  const open = event.deadline > new Date()
+  const now = new Date()
+  const future = event.starts_at > now
+  const open = event.deadline > now
+  const hasSeat = event.capacity > event.confirmed
   const [entry, people] = await Promise.all([
     published && user ? registration(user, id) : { rows: [] },
     owner || (administrator && published) ? roster(id,user) : null
@@ -187,18 +189,22 @@ async function EventDetail({ id, user }) {
       <section className="panel">
         <h2>About this event</h2><p className="description">{event.description}</p>
         <dl className="facts"><div><dt>Starts</dt><dd>{dateText(event.starts_at)} ET</dd></div><div><dt>Ends</dt><dd>{dateText(event.ends_at)} ET</dd></div>
-          <div><dt>Venue</dt><dd>{event.venue}</dd></div><div><dt>Registration deadline</dt><dd>{dateText(event.deadline)} ET</dd></div></dl>
+          <div><dt>Venue</dt><dd>{event.venue}</dd></div>
+          {!published && <div><dt>Registration deadline</dt><dd>{dateText(event.deadline)} ET</dd></div>}</dl>
       </section>
       <aside className="panel side">
-        <h2>{published ? 'Registration' : 'Event status'}</h2><Badge status={event.status} />
+        <h2>{published ? 'Registration' : 'Event status'}</h2>
+        {published ? <SeatAvailability event={event} now={now} /> : <Badge status={event.status} />}
         <dl className="facts"><div><dt>Seats remaining</dt><dd>{event.capacity - event.confirmed} of {event.capacity}</dd></div>
-          <div><dt>On the waitlist</dt><dd>{event.waiting}</dd></div></dl>
-        {enrolled && <p><Badge status={enrolled.status} /> {enrolled.position && `Position ${enrolled.position}`}</p>}
-        {published && enrolled && future && <Form action="cancel" target={id} destination={path} label="Cancel registration" style="quiet" />}
+          <div><dt>On the waitlist</dt><dd>{event.waiting}</dd></div>
+          {published && <div><dt>Registration deadline</dt><dd>{dateText(event.deadline)} ET</dd></div>}</dl>
+        {published && enrolled && <>
+          <RegistrationStatus entry={enrolled} />
+          <Cancellation entry={enrolled} event={event} now={now} destination={path} />
+        </>}
         {published && !enrolled && open && (user
-          ? <Form action="register" target={id} destination={path} label={event.capacity > event.confirmed ? 'Register for event' : 'Join waitlist'} />
-          : <Link className="button primary" href={authPath('login', id)}>Sign in to register</Link>)}
-        {published && !open && <p>Registration is closed.</p>}
+          ? <Form action="register" target={id} destination={path} label={hasSeat ? 'Register for event' : 'Join waitlist'} />
+          : <Link className="button primary" href={authPath('login', id)}>{hasSeat ? 'Sign in to register' : 'Sign in to join waitlist'}</Link>)}
         {owner && event.status === 'draft' && open && <Form action="submit" target={id} destination={path} label="Submit for approval" />}
         {administrator && event.status === 'pending' && open && <Form action="approve" target={id} destination={path} label="Approve and publish" />}
         {owner && published && future && <Form action="capacity" target={id} destination={path} label="Update capacity" style="quiet">
@@ -213,7 +219,7 @@ async function EventDetail({ id, user }) {
 
 function RosterTable({ rows }) {
   return <section className="panel roster"><h2>Roster</h2>
-    {rows.length ? <div className="table-scroll"><table><thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Registered</th><th scope="col">Status</th></tr></thead><tbody>
+    {rows.length ? <div className="table-scroll" role="region" aria-label="Attendee roster table" tabIndex={0}><table><thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Registered</th><th scope="col">Status</th></tr></thead><tbody>
       {rows.map(person => <tr key={person.email}><td>{person.name}</td><td>{person.email}</td><td>{dateText(person.created_at)} ET</td><td><Badge status={person.status} /></td></tr>)}
     </tbody></table></div> : <p>No registrations yet.</p>}</section>
 }
@@ -285,14 +291,56 @@ async function Queue({ owner }) {
     <EventList rows={list.rows} queue empty="No events awaiting approval." /></>
 }
 
+function RegistrationStatus({ entry }) {
+  return <div className="registration-status">
+    <Badge status={entry.status} />
+    {entry.position != null && <span>Waitlist position {entry.position}</span>}
+  </div>
+}
+
+function Cancellation({ entry, event, now, destination }) {
+  if (event.starts_at <= now) {
+    return <p className="hint">Cancellation closed at {dateText(event.starts_at)} ET.</p>
+  }
+
+  const waitlisted = entry.status === 'waitlisted'
+  const label = waitlisted ? 'Leave waitlist' : 'Cancel registration'
+  return <div className="cancellation">
+    <p className="hint">Cancel before {dateText(event.starts_at)} ET.</p>
+    <details>
+      <summary aria-label={`${label} for ${event.title}`}>{label}</summary>
+      <p>{waitlisted ? 'Leaving removes your place in line.' : 'Cancelling releases your confirmed seat.'}</p>
+      <Form action="cancel" target={entry.event_id} destination={destination}
+        label={waitlisted ? 'Confirm leaving waitlist' : 'Confirm cancellation'}
+        accessibleLabel={`${waitlisted ? 'Confirm leaving waitlist' : 'Confirm cancellation'} for ${event.title}`}
+        style="quiet" />
+    </details>
+  </div>
+}
+
+function RegistrationList({ heading, rows, now }) {
+  if (!rows.length) return null
+  return <section className="registration-list">
+    <h2>{heading}</h2>
+    <ul className="rows">{rows.map(event => <li key={event.id} className="row registration-row">
+      <div>
+        <Link className="row-title" href={eventPath(event.event_id)}>{event.title}</Link>
+        <p>{dateText(event.starts_at)} ET · {event.venue}</p>
+        <RegistrationStatus entry={event} />
+      </div>
+      <Cancellation entry={event} event={event} now={now} destination="/?view=my" />
+    </li>)}</ul>
+  </section>
+}
+
 async function MyEvents({ user }) {
   const { rows } = await registrations(user)
-  return <><PageHeading title="My events" description="View your confirmed seats and waitlist positions." />
-    {rows.length ? <ul className="rows">{rows.map(event => <li key={event.id} className="row">
-      <div><Link className="row-title" href={eventPath(event.event_id)}>{event.title}</Link><p>{dateText(event.starts_at)} ET · {event.venue}</p></div>
-      <div className="row-actions"><Badge status={event.status} />{event.position && <span>Position {event.position}</span>}
-        {event.starts_at > new Date() && <Form action="cancel" target={event.event_id} destination="/?view=my" label="Cancel" style="quiet" compact />}
-      </div></li>)}</ul> : <Empty title="No registrations yet"><Link href="/">Explore upcoming events</Link></Empty>}</>
+  const now = new Date()
+  return <><PageHeading title="My events" description="View your seats, waitlist positions, and cancellation deadlines." />
+    {rows.length ? <>
+      <RegistrationList heading="Upcoming and ongoing" rows={rows.filter(event => event.ends_at > now)} now={now} />
+      <RegistrationList heading="Past events" rows={rows.filter(event => event.ends_at <= now).reverse()} now={now} />
+    </> : <Empty title="No registrations yet"><Link href="/">Explore upcoming events</Link></Empty>}</>
 }
 
 async function Inbox({ user }) {
@@ -341,8 +389,8 @@ export default async function Page({ searchParams }) {
   return <>
     <a className="skip" href="#main">Skip to content</a>
     <Header user={user} view={view === 'rosters' ? 'queue' : id ? 'event' : view} />
-    <main id="main" className="wrap">
-      {typeof params.notice === 'string' && <p className="notice" role="status">{params.notice.slice(0, 160)}</p>}
+    <main id="main" className="wrap" tabIndex={-1}>
+      {typeof params.notice === 'string' && <ActionNotice message={params.notice.slice(0, 160)} />}
       {content}
     </main>
     <footer className="footer"><div><strong>Terrapin Events</strong><span>University of Maryland course demo</span></div></footer>

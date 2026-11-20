@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto'
+import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
+import pg from 'pg'
 import { signIn } from './sign-in.js'
 
 const password = 'BrowserAttendeeTest1'
 
 async function signUpForEvent(page, event, email) {
   await page.goto(event)
-  await page.getByRole('link', { name: 'Sign in to register' }).click()
+  await page.getByRole('link', { name: /^Sign in to (register|join waitlist)$/ }).click()
   await page.getByRole('link', { name: 'Create an account' }).click()
   await page.getByLabel('Full name').fill('Browser Test Attendee')
   await page.getByLabel('UMD email').fill(email)
@@ -41,6 +43,12 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
       await page.getByLabel('Starts at').fill(day + 'T17:00')
       await page.getByLabel('Ends at').fill(day + 'T18:00')
       await page.getByLabel('Registration deadline').fill(day + 'T16:00')
+      await page.getByLabel('Capacity', { exact: true }).fill('91')
+      await page.getByRole('button', { name: 'Save draft' }).click()
+      const validation = page.locator('form').getByRole('alert')
+      await expect(validation).toHaveText('Capacity must fit the selected venue.')
+      await expect(validation).toBeFocused()
+      await page.getByLabel('Capacity', { exact: true }).fill('1')
       await page.getByRole('button', { name: 'Save draft' }).click()
       await expect(page.getByRole('status')).toHaveText('Draft saved.')
       const draftUrl = new URL(page.url())
@@ -74,6 +82,10 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
       await expect(eventLink).toHaveText('View event')
       await signUpForEvent(first, event.href, `browser-first-${id}@umd.edu`)
       await expect(first.getByRole('heading', { name: title })).toBeVisible()
+      await expect(first.getByText('Hosted by Browser Test')).toBeVisible()
+      await expect(first.getByText('End-to-end browser verification')).toBeVisible()
+      await expect(first.getByText('Registration deadline', { exact: true })).toBeVisible()
+      await expect(first.getByText('1 seat open', { exact: true })).toBeVisible()
       expect(await first.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
       await first.getByRole('button', { name: 'Register for event' }).click()
       await expect(first.getByRole('status')).toHaveText('Your seat is confirmed.')
@@ -82,14 +94,67 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
       await second.getByRole('button', { name: 'Join waitlist' }).click()
       await expect(second.getByRole('status')).toHaveText('You joined the waitlist at position 1.')
 
-      await first.getByRole('button', { name: 'Cancel registration' }).click()
-      await expect(first.getByRole('status')).toHaveText('Registration cancelled.')
-      await second.getByRole('link', { name: 'Inbox', exact: true }).click()
-      await expect(second.getByText(`A seat opened for ${title}. You’re confirmed.`)).toBeVisible()
+      const myEvents = new URL('/?view=my', event).href
+      await second.goto(myEvents)
+      await expect(second.getByText('Waitlist position 1', { exact: true })).toBeVisible()
+      await expect(second.getByText(/^Cancel before .* ET\.$/)).toBeVisible()
+      const leave = second.locator('summary').filter({ hasText: 'Leave waitlist' })
+      const confirmLeave = second.getByRole('button', { name: 'Confirm leaving waitlist for ' + title, exact: true })
+      await expect(confirmLeave).toBeHidden()
+      await leave.press('Enter')
+      await expect(confirmLeave).toBeVisible()
+      await confirmLeave.click()
+      const waitlistNotice = second.getByRole('status')
+      await expect(waitlistNotice).toHaveText('You left the waitlist.')
+      await expect(waitlistNotice).toBeFocused()
+      await expect(second.getByRole('heading', { name: 'No registrations yet', exact: true })).toBeVisible()
+      await second.goto(event.href)
+      await second.getByRole('button', { name: 'Join waitlist' }).click()
+      await expect(second.getByRole('status')).toHaveText('You joined the waitlist at position 1.')
+
+      const fixture = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL })
+      await fixture.connect()
+      try {
+        await fixture.query("update events set deadline=now()-interval '1 second' where id=$1", [event.searchParams.get('event')])
+        await first.goto(event.href)
+        await expect(first.getByText('Registration closed', { exact: true })).toBeVisible()
+        await expect(first.locator('summary').filter({ hasText: 'Cancel registration' })).toBeVisible()
+        await first.goto(myEvents)
+        const cancel = first.locator('summary').filter({ hasText: 'Cancel registration' })
+        await cancel.press('Enter')
+        await first.keyboard.press('Tab')
+        const confirm = first.getByRole('button', { name: 'Confirm cancellation for ' + title, exact: true })
+        await expect(confirm).toBeFocused()
+        await first.keyboard.press('Enter')
+        const cancellationNotice = first.getByRole('status')
+        await expect(cancellationNotice).toHaveText('Registration cancelled.')
+        await expect(cancellationNotice).toBeFocused()
+        await second.getByRole('link', { name: 'Inbox', exact: true }).click()
+        await expect(second.getByText(`A seat opened for ${title}. You’re confirmed.`)).toBeVisible()
+
+        await fixture.query(`update events set starts_at=now()-interval '1 hour', ends_at=now()-interval '1 minute',
+          deadline=now()-interval '2 hours' where id=$1`, [event.searchParams.get('event')])
+        await second.goto(myEvents)
+        await expect(second.getByRole('heading', { name: 'Past events', exact: true })).toBeVisible()
+        await expect(second.getByText(/^Cancellation closed at .* ET\.$/)).toBeVisible()
+        await expect(second.locator('summary').filter({ hasText: 'Cancel registration' })).toHaveCount(0)
+      } finally {
+        await fixture.end()
+      }
+
       await second.goto(new URL('/?view=accounts', event).href)
       await expect(second.getByRole('heading', { name: 'Access restricted' })).toBeVisible()
       const roster = new URL(event)
       roster.searchParams.set('view','rosters')
+      await page.setViewportSize({ width: 360, height: 800 })
+      await page.goto(roster.href)
+      const rosterTable = page.getByRole('region', { name: 'Attendee roster table' })
+      await expect(rosterTable.getByRole('table')).toBeVisible()
+      const rosterAxe = await new AxeBuilder({ page }).withRules(['scrollable-region-focusable']).analyze()
+      expect(rosterAxe.violations).toEqual([])
+      await rosterTable.focus()
+      await page.keyboard.press('ArrowRight')
+      await expect.poll(() => rosterTable.evaluate(element => element.scrollLeft)).toBeGreaterThan(0)
       await second.goto(roster.href)
       await expect(second.getByRole('heading', { name: 'Access restricted' })).toBeVisible()
       await expect(second.getByRole('table')).toHaveCount(0)
