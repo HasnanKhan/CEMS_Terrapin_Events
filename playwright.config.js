@@ -10,6 +10,7 @@ const baseURL = 'http://localhost:3117'
 export default defineConfig({
   testDir: './tests/browser',
   timeout: 60000,
+  workers: process.env.CI ? 2 : undefined,
   use: {
     baseURL,
     browserName: 'chromium',

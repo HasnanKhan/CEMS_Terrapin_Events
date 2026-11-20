@@ -1,14 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
+import { signIn } from './sign-in.js'
 
 const password = 'BrowserAttendeeTest1'
-
-async function signIn(page, email, secret) {
-  await page.getByLabel('UMD email').fill(email)
-  await page.getByLabel('Password').fill(secret)
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await expect(page.getByRole('status')).toHaveText('Signed in.')
-}
 
 async function signUpForEvent(page, event, email) {
   await page.goto(event)
