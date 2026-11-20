@@ -4,17 +4,18 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { authenticate, currentUser, signOut, updateAccount } from '../lib/auth.js'
 import { changeEvent, changeRegistration, saveDraft } from '../lib/events.js'
-import { Problem } from '../lib/input.js'
+import { optionalId, Problem } from '../lib/input.js'
+import { actionDestination, authPath, browseFilters } from './navigation.js'
 
 export async function submit(action, target, destination, previous, form) {
   let message
-  let path = /^\/(?:\?view=(?:my|inbox|organize|queue|accounts)|\?event=\d+)?$/.test(destination) ? destination : '/'
+  let path = actionDestination(destination)
   try {
     if (action === 'signup' || action === 'login') {
       message = await authenticate(form, action === 'signup')
       if (action === 'signup') {
-        const eventReturn = new URLSearchParams(path.slice(2)).get('event')
-        path = '/?' + new URLSearchParams({ view: 'login', ...(eventReturn ? { eventReturn } : {}) })
+        const params = Object.fromEntries(new URLSearchParams(path.slice(2)))
+        path = authPath('login', optionalId(params.event), browseFilters(params))
       }
     } else if (action === 'logout') {
       await signOut()
