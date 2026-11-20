@@ -68,15 +68,7 @@ npm run test:coverage
 
 Integration tests skip when `TEST_DATABASE_URL` is absent and reject remote hosts. The coverage command requires at least 80% statement coverage in every file under `lib/*.js`. That report covers the backend prototype modules. It does not measure Next.js pages, deployment, accessibility, or load behavior.
 
-| Requirement | Automated evidence |
-| --- | --- |
-| FR-1–9, FR-62 | Account validation, lockout, session expiration and revocation, administrator role changes, audit attribution |
-| FR-11–16, FR-48, FR-52 | Draft validation and ownership, venue capacity, approval queue, publication |
-| FR-24–35, FR-37, FR-39–40, FR-45 | Event visibility, concurrent registration, duplicate prevention, cancellation, FIFO promotion, capacity changes, roster and inbox persistence |
-| NFR-9 | Argon2id salts and verification, legacy hash compatibility |
-| NFR-18 | Trusted client IP, concurrent rolling request limits, window expiry |
-
-This matrix lists the requirements exercised by this suite. Grade or release verification also needs browser, accessibility, security, and load evidence.
+The [verification record](docs/prototype-verification.md) links prototype requirements to their evidence, lists open acceptance checks, and maps the documented design to the implemented components.
 
 GitHub Actions runs the backend tests and the coverage gate against a disposable PostgreSQL service, builds the app, and runs the Chromium workflow. The browser test covers draft approval, guest visibility, signup and return-to-event navigation, waitlist promotion, inbox delivery, and a 360 px event page. To run it locally, keep `TEST_DATABASE_URL` pointed at a dedicated localhost test database. The browser suite creates temporary demo accounts and events in that database.
 
