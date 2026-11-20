@@ -140,7 +140,10 @@ legend { font-weight: 700; }
 @media (max-width: 560px) {
   .hero { grid-template-columns: 1fr; min-height: 0; }
   .hero-art { min-height: 110px; }
+  .section-heading { align-items: baseline; flex-wrap: wrap; gap: .35rem .85rem; }
+  #upcoming { font-size: clamp(1.6rem, 7.5vw, 2.15rem); }
   .event-grid, .detail-grid, .fields { grid-template-columns: 1fr; }
+  .card-banner { min-height: 64px; padding-block: .7rem; }
   .page-heading { align-items: start; flex-direction: column; }
   .row { align-items: start; flex-direction: column; }
 }
