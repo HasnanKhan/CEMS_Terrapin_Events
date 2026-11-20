@@ -84,15 +84,25 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       await query("update accounts set locked_until=now()-interval '1 second' where id=$1", [created.id])
       await assert.rejects(auth.authenticate(credentials(email(0), 'wrongPassword1'), false), /incorrect/)
       await auth.authenticate(credentials(email(0)), false)
-      const { rows: [session] } = await query(`select extract(epoch from s.expires_at-a.created_at)::int as seconds
+      const { rows: [session] } = await query(`select extract(epoch from s.expires_at-a.created_at)::int as idle_seconds,
+        extract(epoch from s.absolute_expires_at-a.created_at)::int as maximum_seconds
         from sessions s join audit_entries a on a.actor_id=s.account_id and a.action='login' and a.outcome='success'
         where s.account_id=$1`, [created.id])
-      assert.equal(session.seconds, 30 * 60)
+      assert.equal(session.idle_seconds, 30 * 60)
+      assert.equal(session.maximum_seconds, 12 * 60 * 60)
       assert.equal((await auth.currentUser()).id, created.id)
       const cookie = cookies().get('terrapin_session')
       assert.equal(cookie.httpOnly, true)
       assert.equal(cookie.sameSite, 'lax')
       await query("update sessions set expires_at=now()-interval '1 second' where account_id=$1", [created.id])
+      assert.equal(await auth.currentUser(), null)
+      await auth.authenticate(credentials(email(0)), false)
+      await query("update sessions set absolute_expires_at=now()+interval '5 minutes' where account_id=$1", [created.id])
+      assert.equal((await auth.currentUser()).id, created.id)
+      const { rows: [capped] } = await query('select expires_at=absolute_expires_at as capped from sessions where account_id=$1', [created.id])
+      assert.equal(capped.capped, true)
+      await query(`update sessions set expires_at=now()+interval '5 minutes',
+        absolute_expires_at=now()-interval '1 second' where account_id=$1`, [created.id])
       assert.equal(await auth.currentUser(), null)
       await auth.authenticate(credentials(email(0)), false)
       await auth.signOut()

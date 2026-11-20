@@ -22,7 +22,7 @@ Test links identify where the evidence lives. **Partial evidence** means the tes
 | FR-3 | Password-rule boundaries and signup rejection are tested. [Validation specs](../tests/input.test.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-4 | Incorrect login fails and correct login creates a readable session. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-5 | Five failed attempts set a 15-minute lock. An expired lock permits another attempt. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-6 | Sessions start with a 30-minute idle expiry. Sign-out and simulated expiry invalidate them. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-6 | Sessions start with a 30-minute idle expiry and an additional 12-hour cap. Tests exercise sign-out, idle expiry, and the absolute cap. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-7 | New accounts receive only the Attendee role. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
 | FR-8 | Grant and removal of Organizer access take effect in an active session. Deactivation invalidates the session, and reactivation is tested. [Browser access specs](../tests/browser/account-access.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for all role combinations |
 | FR-9 | Role denial, organizer ownership, and guest and attendee roster restrictions are exercised. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for every protected operation |
