@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { audit, currentUser, extraRoles } from '../lib/auth.js'
+import { audit, currentUser, extraRoles, selfSignupEnabled } from '../lib/auth.js'
 import { query } from '../lib/db.js'
 import { approvalQueue, categories, eventsPerPage, getEvent, organizerEvents, publicEvents, registration, registrations, roster, venues } from '../lib/events.js'
 import { optionalId } from '../lib/input.js'
@@ -113,6 +113,13 @@ async function Explore({ params }) {
 }
 
 function Auth({ signup, returnId }) {
+  const allowSignup = selfSignupEnabled()
+  if (signup && !allowSignup) {
+    return <section className="narrow panel auth-panel">
+      <h1>Account creation is unavailable</h1>
+      <Link className="button primary" href={authPath('login', returnId)}>Sign in</Link>
+    </section>
+  }
   return <section className="narrow panel auth-panel">
     <p className="eyebrow">Terrapin Events</p>
     <h1>{signup ? 'Create an account' : 'Sign in'}</h1>
@@ -123,8 +130,8 @@ function Auth({ signup, returnId }) {
       <label>Password<input name="password" type="password" autoComplete={signup ? 'new-password' : 'current-password'} required maxLength={128} minLength={signup ? 12 : undefined} /></label>
       {signup && <p className="hint">Use at least 12 characters with a letter and a number.</p>}
     </Form>
-    <p className="auth-alternate">{signup ? 'Already have an account? ' : 'New to Terrapin Events? '}
-      <Link href={authPath(signup ? 'login' : 'signup', returnId)}>{signup ? 'Sign in' : 'Create an account'}</Link></p>
+    {allowSignup && <p className="auth-alternate">{signup ? 'Already have an account? ' : 'New to Terrapin Events? '}
+      <Link href={authPath(signup ? 'login' : 'signup', returnId)}>{signup ? 'Sign in' : 'Create an account'}</Link></p>}
   </section>
 }
 

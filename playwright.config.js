@@ -26,7 +26,8 @@ export default defineConfig({
       DATABASE_URL_UNPOOLED: database.href,
       BOOTSTRAP_EMAIL: 'browser-coordinator@umd.edu',
       BOOTSTRAP_PASSWORD: 'BrowserCoordinatorTest1',
-      SEED_DEMO: 'false'
+      SEED_DEMO: 'false',
+      SELF_SIGNUP_ENABLED: 'true'
     }
   }
 })

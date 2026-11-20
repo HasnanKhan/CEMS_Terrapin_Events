@@ -47,7 +47,7 @@ Vercel Hobby is intended for personal, non-commercial use and has usage limits. 
 
 ## Request limits
 
-The app accepts up to 20 sign-in attempts per client IP and 10 combined registration or cancellation attempts per account in a rolling minute. Vercel supplies the trusted client IP. Local requests and deployments without a trusted IP share a fallback sign-in bucket. Apply schema changes with `npm run db:setup` before deploying a version that uses the request limits.
+The app accepts up to five signup attempts and 20 sign-in attempts per client IP and 10 combined registration or cancellation attempts per account in a rolling minute. Vercel supplies the trusted client IP. Local requests and deployments without a trusted IP share a fallback sign-in bucket. Apply schema changes with `npm run db:setup` before deploying a version that uses the request limits. Set `SELF_SIGNUP_ENABLED=false` on Vercel and redeploy to pause public account creation while existing users continue to sign in. Demo signup checks email format only. Use a verified identity provider before collecting real university records.
 
 ## Security audit retention
 
