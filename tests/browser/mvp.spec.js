@@ -99,3 +99,10 @@ test('account pages provide browser isolation and discourage caching', async ({ 
   expect(response.headers()['content-security-policy']).toContain("frame-ancestors 'none'")
   expect(response.headers()['cache-control']).toContain('no-store')
 })
+
+test('readiness verifies the app can reach its PostgreSQL database', async ({ request }) => {
+  const response = await request.get('/api/health')
+  expect(response.status()).toBe(200)
+  expect(response.headers()['cache-control']).toBe('no-store')
+  expect(await response.json()).toEqual({ status: 'ok' })
+})
