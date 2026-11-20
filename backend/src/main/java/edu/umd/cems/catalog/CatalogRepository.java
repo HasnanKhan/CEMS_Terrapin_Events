@@ -9,19 +9,14 @@ import java.util.Optional;
 
 interface CatalogRepository extends Repository<CatalogEvent, Integer> {
     String PUBLISHED_EVENTS = """
-            select e.id, e.title, e.description, e.category, e.host, v.name as venue,
+            select e.id, e.title, e.description, e.category, e.host, e.venue,
                    e.starts_at as "startsAt", e.ends_at as "endsAt", e.deadline as "registrationDeadline",
-                   e.capacity,
-                   (select cast(count(*) as integer) from registrations r
-                    where r.event_id = e.id and r.status = 'confirmed') as confirmed,
-                   (select cast(count(*) as integer) from registrations r
-                    where r.event_id = e.id and r.status = 'waitlisted') as waitlisted
-            from events e join venues v on v.id = e.venue_id
-            where e.status = 'published'
+                   e.capacity, e.confirmed, e.waitlisted
+            from cems_catalog.published_events e
             """;
 
     @Query(value = PUBLISHED_EVENTS + """
-            and e.ends_at > now()
+            where e.ends_at > now()
             and (:keyword = '' or strpos(lower(e.title), lower(:keyword)) > 0
                                or strpos(lower(e.description), lower(:keyword)) > 0)
             and (:category = '' or e.category = :category)
@@ -31,8 +26,16 @@ interface CatalogRepository extends Repository<CatalogEvent, Integer> {
             """, nativeQuery = true)
     List<EventRow> findPublishedPage(String keyword, String category, Integer venue, int limit, long offset);
 
-    @Query(value = PUBLISHED_EVENTS + "and e.id = :id", nativeQuery = true)
+    @Query(value = PUBLISHED_EVENTS + "where e.id = :id", nativeQuery = true)
     Optional<EventRow> findPublishedEvent(int id);
+
+    @Query(value = "select id, name from cems_catalog.venues order by name, id", nativeQuery = true)
+    List<VenueRow> findVenues();
+
+    interface VenueRow {
+        int getId();
+        String getName();
+    }
 
     interface EventRow {
         int getId();

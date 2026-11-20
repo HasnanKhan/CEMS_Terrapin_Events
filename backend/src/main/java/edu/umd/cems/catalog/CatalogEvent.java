@@ -7,7 +7,7 @@ import org.hibernate.annotations.Immutable;
 
 @Entity
 @Immutable
-@Table(name = "events")
+@Table(schema = "cems_catalog", name = "published_events")
 class CatalogEvent {
     @Id
     private Integer id;
