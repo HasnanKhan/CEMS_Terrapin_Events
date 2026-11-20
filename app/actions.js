@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { authenticate, currentUser, signOut, updateAccount } from '../lib/auth.js'
 import { changeEvent, changeRegistration, saveDraft } from '../lib/events.js'
 import { optionalId, Problem } from '../lib/input.js'
+import { feedbackRedirect } from './feedback.js'
 import { actionDestination, authPath, browseFilters } from './navigation.js'
 
 export async function submit(action, target, destination, previous, form) {
@@ -52,6 +53,5 @@ export async function submit(action, target, destination, previous, form) {
     return { error: 'Something went wrong. Please try again.' }
   }
   revalidatePath('/')
-  if (message) path += (path.includes('?') ? '&' : '?') + new URLSearchParams({ notice: message })
-  redirect(path)
+  redirect(message ? await feedbackRedirect(path, message) : path)
 }
