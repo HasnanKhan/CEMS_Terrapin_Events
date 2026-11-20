@@ -4,6 +4,7 @@ import { query } from '../lib/db.js'
 import { approvalQueue, categories, eventsPerPage, getEvent, organizerEvents, publicEvents, registration, registrations, roster, rosterEvents, venues } from '../lib/events.js'
 import { optionalId } from '../lib/input.js'
 import Form, { ActionNotice } from './form.js'
+import { authPath, browseFilters, browsePath, eventPath, pageRoute } from './navigation.js'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,11 +15,7 @@ const timeText = date => new Intl.DateTimeFormat('en-US', { timeZone: zone, hour
 const statusLabel = { draft: 'Draft', pending: 'Pending approval', published: 'Published', confirmed: 'Confirmed', waitlisted: 'Waitlisted' }
 const roleLabel = { organizer: 'Organizer', administrator: 'Administrator', system_admin: 'System administrator' }
 const has = (user, role) => user?.roles.includes(role)
-const eventPath = id => '/?event=' + id
 const rosterPath = id => '/?view=rosters' + (id ? '&event=' + id : '')
-const authPath = (view, eventId) => '/?' + new URLSearchParams({
-  view, ...(eventId ? { eventReturn: String(eventId) } : {})
-})
 
 function Badge({ status }) {
   return <span className={'badge ' + status}>{statusLabel[status]}</span>
@@ -41,8 +38,8 @@ function Header({ user, view }) {
   </div></header>
 }
 
-function Empty({ title, children }) {
-  return <div className="empty"><h3>{title}</h3>{children && <p>{children}</p>}</div>
+function Empty({ title, children, heading: Heading = 'h3' }) {
+  return <div className="empty"><Heading>{title}</Heading>{children && <p>{children}</p>}</div>
 }
 
 function SeatAvailability({ event, now = new Date() }) {
@@ -54,24 +51,19 @@ function SeatAvailability({ event, now = new Date() }) {
 const categoryThemes = { Technology: 'tech', 'Arts & Culture': 'arts', Community: 'community', Academic: 'academic', 'Sports & Recreation': 'sports' }
 
 async function Explore({ params }) {
-  const keyword = typeof params.q === 'string' ? params.q.trim().slice(0, 100) : ''
-  const category = categories.includes(params.category) ? params.category : ''
-  const page = optionalId(params.page) ?? 1
+  const { keyword, category, venue: venueId, page } = browseFilters(params)
   const { rows: locations } = await venues()
-  const venue = locations.find(location => location.id === optionalId(params.venue))?.id ?? null
-  const { rows: results } = await publicEvents({ keyword, category, venue, page })
+  const venue = locations.find(location => location.id === venueId)?.id ?? null
+  const filters = { keyword, category, venue, page }
+  const { rows: results } = await publicEvents(filters)
   const rows = results.slice(0, eventsPerPage)
   const filtered = Boolean(keyword || category || venue)
-  function pageLink(number) {
-    const search = new URLSearchParams()
-    if (keyword) search.set('q', keyword)
-    if (category) search.set('category', category)
-    if (venue) search.set('venue', String(venue))
-    if (number > 1) search.set('page', String(number))
-    return (search.size ? '/?' + search : '/') + '#upcoming'
-  }
+  const showHero = !filtered && page === 1
+  const Heading = showHero ? 'h2' : 'h1'
+  const ResultHeading = showHero ? 'h3' : 'h2'
+  const now = new Date()
   return <>
-    <section className="hero">
+    {showHero && <section className="hero">
       <div className="hero-copy">
         <p className="eyebrow">University of Maryland · College Park</p>
         <h1>Campus life,<br />on your calendar.</h1>
@@ -79,60 +71,63 @@ async function Explore({ params }) {
         <a className="button hero-button" href="#upcoming">Explore events</a>
       </div>
       <div className="hero-art" aria-hidden="true"><div className="shell-pattern" /></div>
-    </section>
-    <section id="upcoming" className="section">
-      <div className="section-heading"><h2>Upcoming events</h2><p className="section-count">{rows.length} {rows.length === 1 ? 'event' : 'events'}{(page > 1 || results.length > eventsPerPage) && ' on this page'}</p></div>
-      <form action="/#upcoming" method="get" className="event-filter" key={pageLink(1)}>
+    </section>}
+    <section className={showHero ? 'section' : undefined} aria-labelledby="upcoming">
+      <div className="section-heading"><Heading id="upcoming" tabIndex={-1}>Upcoming events</Heading>{rows.length > 0 &&
+        <p className="section-count">{rows.length} {rows.length === 1 ? 'event' : 'events'}{(page > 1 || results.length > eventsPerPage) && ' on this page'}</p>}</div>
+      <form action={browsePath()} method="get" className="event-filter" key={browsePath({ ...filters, page: 1 })}>
         <label>Search events<input type="search" name="q" placeholder="Search by title or description" defaultValue={keyword} maxLength={100} /></label>
         <label>Category<select name="category" defaultValue={category}><option value="">All categories</option>
           {categories.map(item => <option key={item}>{item}</option>)}</select></label>
         <label>Venue<select name="venue" defaultValue={venue ?? ''}><option value="">All venues</option>
           {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
         <div className="filter-actions"><button className="button primary">Search</button>
-          {filtered && <Link href="/#upcoming">Clear filters</Link>}</div>
+          {filtered && <Link href={browsePath()}>Clear filters</Link>}</div>
       </form>
       {rows.length ? <div className="event-grid">{rows.map(event =>
         <article key={event.id} className="event-card">
           <div className={'card-banner ' + (categoryThemes[event.category] ?? 'academic')}><span>{event.category}</span></div>
           <div className="card-body">
             <p className="event-date">{dayText(event.starts_at)} · {timeText(event.starts_at)} ET</p>
-            <h3><Link href={eventPath(event.id)}>{event.title}</Link></h3>
+            <ResultHeading className="event-title"><Link href={eventPath(event.id, filters)}>{event.title}</Link></ResultHeading>
             <p className="event-location">{event.venue}</p>
-            <div className="card-footer"><SeatAvailability event={event} /><Link href={eventPath(event.id)} aria-label={'View event: ' + event.title}>View event</Link></div>
+            <div className="card-footer"><SeatAvailability event={event} now={now} /></div>
           </div>
         </article>)}</div>
         : filtered || page > 1
-          ? <Empty title="No events found">{page > 1 ? 'Try an earlier page.' : 'Try another keyword or change your filters.'}</Empty>
+          ? <Empty title="No events found" heading={ResultHeading}>{page > 1
+            ? <Link href={browsePath({ ...filters, page: 1 })}>Return to the first page of results</Link>
+            : 'Try another keyword or change your filters.'}</Empty>
           : <Empty title="No upcoming events">Published events will appear here.</Empty>}
       {(page > 1 || results.length > eventsPerPage) && <nav className="pagination" aria-label="Event pages">
-        {page > 1 && <Link className="button quiet" href={pageLink(page - 1)}>Previous</Link>}
+        {page > 1 && <Link className="button quiet" href={browsePath({ ...filters, page: page - 1 })}>Previous</Link>}
         <span>Page {page}</span>
-        {results.length > eventsPerPage && <Link className="button quiet" href={pageLink(page + 1)}>Next</Link>}
+        {results.length > eventsPerPage && <Link className="button quiet" href={browsePath({ ...filters, page: page + 1 })}>Next</Link>}
       </nav>}
     </section>
   </>
 }
 
-function Auth({ signup, returnId }) {
+function Auth({ signup, returnId, filters }) {
   const allowSignup = selfSignupEnabled()
   if (signup && !allowSignup) {
     return <section className="narrow panel auth-panel">
       <h1>Account creation is unavailable</h1>
-      <Link className="button primary" href={authPath('login', returnId)}>Sign in</Link>
+      <Link className="button primary" href={authPath('login', returnId, filters)}>Sign in</Link>
     </section>
   }
   return <section className="narrow panel auth-panel">
     <p className="eyebrow">Terrapin Events</p>
     <h1>{signup ? 'Create an account' : 'Sign in'}</h1>
     <p>{signup ? 'Use a fictional @umd.edu address for this course demo.' : 'Sign in to manage your campus events and registrations.'}</p>
-    <Form key={signup ? 'signup' : 'login'} action={signup ? 'signup' : 'login'} destination={returnId ? eventPath(returnId) : '/'} label={signup ? 'Create account' : 'Sign in'}>
+    <Form key={signup ? 'signup' : 'login'} action={signup ? 'signup' : 'login'} destination={returnId ? eventPath(returnId, filters) : '/'} label={signup ? 'Create account' : 'Sign in'}>
       {signup && <label>Full name<input name="name" autoComplete="name" required maxLength={100} /></label>}
       <label>UMD email<input name="email" type="email" autoComplete="username" placeholder="demo@umd.edu" required maxLength={254} /></label>
       <label>Password<input name="password" type="password" autoComplete={signup ? 'new-password' : 'current-password'} required maxLength={128} minLength={signup ? 12 : undefined} /></label>
       {signup && <p className="hint">Use at least 12 characters with a letter and a number.</p>}
     </Form>
     {allowSignup && <p className="auth-alternate">{signup ? 'Already have an account? ' : 'New to Terrapin Events? '}
-      <Link href={authPath(signup ? 'login' : 'signup', returnId)}>{signup ? 'Sign in' : 'Create an account'}</Link></p>}
+      <Link href={authPath(signup ? 'login' : 'signup', returnId, filters)}>{signup ? 'Sign in' : 'Create an account'}</Link></p>}
   </section>
 }
 
@@ -166,7 +161,7 @@ async function EventForm({ event }) {
   </section>
 }
 
-async function EventDetail({ id, user }) {
+async function EventDetail({ id, user, filters }) {
   const event = await getEvent(id,user)
   if (!event) return <Empty title="Event unavailable">Check the event link or your access.</Empty>
   const owner = has(user,'organizer') && user.id === event.owner_id
@@ -181,9 +176,12 @@ async function EventDetail({ id, user }) {
     owner || (administrator && published) ? roster(id,user) : null
   ])
   const enrolled = entry.rows[0]
-  const path = eventPath(id)
+  const path = eventPath(id, filters)
+  const directory = browsePath(filters)
   return <>
-    <Link className="back" href={published ? '/' : owner ? '/?view=organize' : '/?view=queue'}>{published ? 'All events' : owner ? 'Organizer workspace' : 'Approval queue'}</Link>
+    <Link className="back" href={published ? directory : owner ? '/?view=organize' : '/?view=queue'}>
+      {published ? directory === browsePath() ? 'All events' : 'Back to results' : owner ? 'Organizer workspace' : 'Approval queue'}
+    </Link>
     <div className="detail-heading"><p className="eyebrow">{event.category}</p><h1>{event.title}</h1><p>Hosted by {event.host}</p></div>
     <div className="detail-grid">
       <section className="panel">
@@ -204,7 +202,7 @@ async function EventDetail({ id, user }) {
         </>}
         {published && !enrolled && open && (user
           ? <Form action="register" target={id} destination={path} label={hasSeat ? 'Register for event' : 'Join waitlist'} />
-          : <Link className="button primary" href={authPath('login', id)}>{hasSeat ? 'Sign in to register' : 'Sign in to join waitlist'}</Link>)}
+          : <Link className="button primary" href={authPath('login', id, filters)}>{hasSeat ? 'Sign in to register' : 'Sign in to join waitlist'}</Link>)}
         {owner && event.status === 'draft' && open && <Form action="submit" target={id} destination={path} label="Submit for approval" />}
         {administrator && event.status === 'pending' && open && <Form action="approve" target={id} destination={path} label="Approve and publish" />}
         {owner && published && future && <Form action="capacity" target={id} destination={path} label="Update capacity" style="quiet">
@@ -365,16 +363,17 @@ async function Accounts() {
     </section>)}</div></>
 }
 
+export async function generateMetadata({ searchParams }) {
+  return { title: pageRoute(await searchParams).title + ' | Terrapin Events' }
+}
+
 export default async function Page({ searchParams }) {
   const params = await searchParams
   const user = await currentUser()
-  const view = typeof params.view === 'string' ? params.view : 'events'
-  const id = optionalId(params.event)
-  const required = { my: 'attendee', inbox: 'attendee', organize: 'organizer', queue: 'administrator', rosters: 'administrator', accounts: 'system_admin' }
-  const role = Object.hasOwn(required,view) ? required[view] : null
+  const { view, id, role } = pageRoute(params)
   let content
-  if (id && view !== 'rosters') content = <EventDetail id={id} user={user} />
-  else if (view === 'login' || view === 'signup') content = <Auth signup={view === 'signup'} returnId={optionalId(params.eventReturn)} />
+  if (id && view !== 'rosters') content = <EventDetail id={id} user={user} filters={browseFilters(params)} />
+  else if (view === 'login' || view === 'signup') content = <Auth signup={view === 'signup'} returnId={optionalId(params.eventReturn)} filters={browseFilters(params)} />
   else if (role && !has(user,role)) {
     await audit({ query }, user, view === 'rosters' && id ? 'roster_view' : 'page_view', view === 'rosters' && id ? id : view, 'denied')
     content = user ? <Empty title="Access restricted">Your account doesn’t have access to this page.</Empty> : <Auth />
