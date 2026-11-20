@@ -56,3 +56,24 @@ The app records sign-ins, account lockouts, authorization denials, rate-limit de
 ## Registration consistency
 
 Every registration, cancellation, and published capacity change locks the relevant event row in PostgreSQL before counting seats or changing the roster. A unique constraint prevents multiple active entries for the same user and event. Confirmed seat changes, FIFO promotion, and related inbox entries commit together. Session tokens are stored as hashes and expire after 30 minutes of inactivity.
+
+## Prototype verification
+
+Run `npm test` for the unit checks. For the full suite, set `TEST_DATABASE_URL` to a dedicated PostgreSQL database on localhost. Load the schema before running coverage:
+
+```sh
+psql "$TEST_DATABASE_URL" -f lib/schema.sql
+npm run test:coverage
+```
+
+Integration tests skip when `TEST_DATABASE_URL` is absent and reject remote hosts. The coverage command requires at least 80% statement coverage in every file under `lib/*.js`. That report covers the backend prototype modules. It does not measure Next.js pages, deployment, accessibility, or load behavior.
+
+| Requirement | Automated evidence |
+| --- | --- |
+| FR-1–9, FR-62 | Account validation, lockout, session expiration and revocation, administrator role changes, audit attribution |
+| FR-11–16, FR-48, FR-52 | Draft validation and ownership, venue capacity, approval queue, publication |
+| FR-24–35, FR-37, FR-39–40, FR-45 | Event visibility, concurrent registration, duplicate prevention, cancellation, FIFO promotion, capacity changes, roster and inbox persistence |
+| NFR-9 | Argon2id salts and verification, legacy hash compatibility |
+| NFR-18 | Trusted client IP, concurrent rolling request limits, window expiry |
+
+This matrix lists the requirements exercised by this suite. Grade or release verification also needs browser, accessibility, security, and load evidence.

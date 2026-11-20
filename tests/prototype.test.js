@@ -1,0 +1,192 @@
+import { strict as assert } from 'node:assert'
+import crypto, { randomBytes } from 'node:crypto'
+import { register, syncBuiltinESMExports } from 'node:module'
+import { test } from 'node:test'
+import { database, query } from '../lib/db.js'
+import { hashPassword, tokenHash } from '../lib/password.js'
+import { cookies, runRequest } from './support/request.js'
+
+register('./support/resolve.js', import.meta.url)
+
+test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_URL }, async t => {
+  const url = new URL(process.env.TEST_DATABASE_URL)
+  assert.ok(['localhost', '127.0.0.1', '[::1]'].includes(url.hostname), 'Use an isolated local PostgreSQL database.')
+  process.env.DATABASE_URL = url.href
+  process.env.VERCEL = '1'
+  const auth = await import('../lib/auth.js')
+  const events = await import('../lib/events.js')
+
+  const marker = randomBytes(3).toString('hex')
+  const ip = '2001:db8::' + marker.slice(0, 4) + ':' + marker.slice(4)
+  const password = 'TestPassword2026'
+  const email = number => `test-${marker}-${number}@umd.edu`
+  const ownerIds = []
+  const subjects = [tokenHash(ip)]
+  let organizer
+  let administrator
+  let eventId
+
+  async function account(number, roles = ['attendee']) {
+    const { rows: [row] } = await query('insert into accounts(name,email,password_hash,roles) values($1,$2,$3,$4) returning id,name,email,roles',
+      ['Test Account', email(number), await hashPassword(password), roles])
+    ownerIds.push(row.id)
+    subjects.push(tokenHash(String(row.id)))
+    return row
+  }
+
+  const form = fields => {
+    const data = new FormData()
+    for (const [key, value] of Object.entries(fields)) data.set(key, value)
+    return data
+  }
+  const credentials = (address, pass = password) => form({ email: address, password: pass, name: 'Test Account' })
+
+  t.after(async () => {
+    try {
+      if (eventId) {
+        await query('delete from notifications where event_id=$1', [eventId])
+        await query('delete from registrations where event_id=$1', [eventId])
+        await query('delete from events where id=$1', [eventId])
+      }
+      await query('delete from audit_entries where actor_id=any($1::int[]) or source_ip=$2', [ownerIds, ip])
+      await query('delete from accounts where id=any($1::int[]) or email=$2', [ownerIds, email(0)])
+      await query('delete from rate_limits where subject=any($1::text[])', [subjects])
+    } finally {
+      await database().end()
+    }
+  })
+
+  await runRequest(ip, async () => {
+    await t.test('FR-1–7 validates signup, locks failed logins, and expires and revokes sessions', async () => {
+      await assert.rejects(auth.authenticate(credentials('guest@example.com'), true), /@umd.edu/)
+      await assert.rejects(auth.authenticate(credentials(email(0), 'weak'), true), /12–128/)
+      await assert.rejects(auth.authenticate(form({ email: email(0), password }), true), /full name/)
+      assert.match(await auth.authenticate(credentials(email(0)), true), /Account created/)
+      await assert.rejects(auth.authenticate(credentials(email(0)), true), /already exists/)
+      const { rows: [created] } = await query('select id,roles from accounts where email=$1', [email(0)])
+      ownerIds.push(created.id)
+      assert.deepEqual(created.roles, ['attendee'])
+
+      assert.equal(await auth.currentUser(), null)
+      cookies().set('terrapin_session', 'invalid')
+      assert.equal(await auth.currentUser(), null)
+      for (let count = 0; count < 5; count++) {
+        await assert.rejects(auth.authenticate(credentials(email(0), 'wrongPassword1'), false), /incorrect/)
+      }
+      await assert.rejects(auth.authenticate(credentials(email(0)), false), /temporarily locked/)
+      await query("update accounts set locked_until=now()-interval '1 second' where id=$1", [created.id])
+      await assert.rejects(auth.authenticate(credentials(email(0), 'wrongPassword1'), false), /incorrect/)
+      await auth.authenticate(credentials(email(0)), false)
+      assert.equal((await auth.currentUser()).id, created.id)
+      const cookie = cookies().get('terrapin_session')
+      assert.equal(cookie.httpOnly, true)
+      assert.equal(cookie.sameSite, 'lax')
+      await query("update sessions set expires_at=now()-interval '1 second' where account_id=$1", [created.id])
+      assert.equal(await auth.currentUser(), null)
+      await auth.authenticate(credentials(email(0)), false)
+      await auth.signOut()
+      assert.equal(await auth.currentUser(), null)
+      assert.equal((await query('select id from accounts where id=$1 and failed=0 and locked_until is null', [created.id])).rowCount, 1)
+    })
+
+    await t.test('FR-8–9 and FR-62 enforce role management and record actor, target, and outcome', async () => {
+      administrator = await account(1, ['attendee', 'administrator', 'system_admin'])
+      organizer = await account(2, ['attendee'])
+      const roles = form({ active: 'on', role: 'organizer' })
+      await assert.rejects(auth.updateAccount(organizer, organizer.id, roles), /permission/)
+      await auth.updateAccount(administrator, organizer.id, roles)
+      organizer.roles = ['attendee', 'organizer']
+      await auth.authenticate(credentials(organizer.email), false)
+      assert.equal((await auth.currentUser()).id, organizer.id)
+      await auth.updateAccount(administrator, organizer.id, form({ role: 'organizer' }))
+      assert.equal(await auth.currentUser(), null)
+      await auth.updateAccount(administrator, organizer.id, roles)
+
+      const { rows } = await query('select actor_id,action,outcome,source_ip from audit_entries where target=$1 and source_ip=$2',
+        [String(organizer.id), ip])
+      for (const [actor, action, outcome] of [
+        [organizer, 'account_update', 'denied'],
+        [administrator, 'role_change', 'success'],
+        [administrator, 'account_deactivation', 'success'],
+        [administrator, 'account_activation', 'success']
+      ]) assert.ok(rows.some(row => row.actor_id === actor.id && row.action === action && row.outcome === outcome))
+    })
+
+    await t.test('NFR-11 and NFR-18 audit rejected requests and prune expired counters', async t => {
+      await assert.rejects(auth.authenticate(credentials('x'.repeat(255)), false), /254 characters/)
+      const expired = tokenHash('expired:' + marker)
+      subjects.push(expired)
+      await query(`insert into rate_limits(scope,subject,attempts,last_seen)
+        values('login',$1,array[now()-interval '2 hours'],now()-interval '2 hours')`, [expired])
+      await query(`update rate_limits set attempts=array_fill(now(),array[20])
+        where scope='login' and subject=$1`, [tokenHash(ip)])
+      const counter = t.mock.method(crypto, 'randomInt', () => 0)
+      syncBuiltinESMExports()
+      try {
+        await assert.rejects(auth.authenticate(credentials(email(0)), false), /Too many requests/)
+      } finally {
+        counter.mock.restore()
+        syncBuiltinESMExports()
+      }
+      assert.equal((await query('select 1 from rate_limits where subject=$1', [expired])).rowCount, 0)
+      const { rows } = await query("select outcome from audit_entries where action='login' and source_ip=$1", [ip])
+      assert.ok(rows.some(row => row.outcome === 'invalid'))
+      assert.ok(rows.some(row => row.outcome === 'rate_limited'))
+    })
+
+    await t.test('FR-11–16 and FR-48/52 validate, edit, submit, and publish an owned draft', async () => {
+      const date = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10)
+      const venue = (await events.venues()).rows.find(row => row.name === 'Iribe Center')
+      const details = {
+        title: 'Test event ' + marker, description: 'Requirements verification', category: 'Academic',
+        host: 'Sample organization', venue: String(venue.id), capacity: '1',
+        starts: date + 'T17:00', ends: date + 'T18:00', deadline: date + 'T16:00'
+      }
+      await assert.rejects(events.saveDraft(organizer, null, form({ ...details, title: '' })), /Complete/)
+      await assert.rejects(events.saveDraft(organizer, null, form({ ...details, starts: 'bad-date' })), /dates and times/)
+      await assert.rejects(events.saveDraft(organizer, null, form({ ...details, capacity: '999' })), /selected venue/)
+      await assert.rejects(events.saveDraft(organizer, null, form({ ...details, deadline: date + 'T18:30' })), /Eastern times/)
+      eventId = await events.saveDraft(organizer, null, form(details))
+      assert.equal(await events.getEvent(eventId, null), null)
+      assert.equal((await events.getEvent(eventId, organizer)).status, 'draft')
+      await events.saveDraft(organizer, eventId, form({ ...details, description: 'Updated description' }))
+      await assert.rejects(events.changeEvent(organizer, eventId, 'approve', form({})), /permission/)
+      await events.changeEvent(organizer, eventId, 'submit', form({}))
+      assert.ok((await events.approvalQueue(organizer.id)).rows.some(row => row.id === eventId))
+      assert.equal((await events.getEvent(eventId, administrator)).status, 'pending')
+      await events.changeEvent(administrator, eventId, 'approve', form({}))
+      const { rows } = await events.publicEvents({ keyword: marker.toUpperCase(), category: 'Academic', venue: venue.id, page: 1 })
+      assert.equal(rows.length, 1)
+      assert.equal(rows[0].description, 'Updated description')
+      assert.ok((await events.organizerEvents(organizer)).rows.some(row => row.id === eventId))
+    })
+
+    await t.test('FR-26–35, FR-37, FR-39–40 and FR-45 keep seats and inbox records consistent', async () => {
+      assert.ok(eventId)
+      const users = await Promise.all([3, 4, 5].map(number => account(number)))
+      await Promise.all(users.map(user => events.changeRegistration(user, eventId, false)))
+      const { rows: roster } = await events.roster(eventId)
+      assert.equal(roster.filter(row => row.status === 'confirmed').length, 1)
+      assert.equal(roster.filter(row => row.status === 'waitlisted').length, 2)
+      const confirmed = users.find(user => user.email === roster.find(row => row.status === 'confirmed').email)
+      const waiting = []
+      for (const user of users) {
+        const { rows: [entry] } = await events.registration(user, eventId)
+        if (entry.position) waiting[entry.position - 1] = user
+      }
+      await assert.rejects(events.changeRegistration(confirmed, eventId, false), /already have/)
+      await assert.rejects(events.changeEvent(organizer, eventId, 'capacity', form({ capacity: '999' })), /fit the venue/)
+      await events.changeRegistration(confirmed, eventId, true)
+      assert.equal((await events.registrations(waiting[0])).rows[0].status, 'confirmed')
+      assert.equal((await events.registration(waiting[1], eventId)).rows[0].position, 1)
+      await events.changeEvent(organizer, eventId, 'capacity', form({ capacity: '2' }))
+      assert.equal((await events.registration(waiting[1], eventId)).rows[0].status, 'confirmed')
+      const { rows } = await query('select kind,account_id from notifications where event_id=$1 order by id', [eventId])
+      assert.equal(rows.filter(row => row.kind === 'confirmed').length, 1)
+      assert.equal(rows.filter(row => row.kind === 'waitlisted').length, 2)
+      assert.deepEqual(rows.filter(row => row.kind === 'promoted').map(row => row.account_id), waiting.map(user => user.id))
+      await query("update events set deadline=now()-interval '1 second' where id=$1", [eventId])
+      await assert.rejects(events.changeRegistration(confirmed, eventId, false), /closed/)
+    })
+  })
+})
