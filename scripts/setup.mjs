@@ -2,6 +2,11 @@ import { readFile } from 'node:fs/promises'
 import { database, transaction } from '../lib/db.js'
 import { hashPassword, validEmail, validPassword } from '../lib/password.js'
 
+// Neon provides a direct connection for schema changes and a pooled one for app traffic.
+if (process.env.DATABASE_URL_UNPOOLED) {
+  process.env.DATABASE_URL = process.env.DATABASE_URL_UNPOOLED
+}
+
 const email = process.env.BOOTSTRAP_EMAIL?.trim().toLowerCase()
 const password = process.env.BOOTSTRAP_PASSWORD || ''
 if ((email || password) && (!validEmail(email || '') || !validPassword(password))) {

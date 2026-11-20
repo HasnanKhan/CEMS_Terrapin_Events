@@ -32,9 +32,13 @@ npm run dev
 
 Open [localhost:3000](http://localhost:3000). Sign in with the bootstrap account to create an event and approve it from **Approvals**. To demo the waitlist, use **Build Night at Iribe** and three fictional attendee accounts. Register all three, cancel one confirmed registration, then check the third account’s **My events** and **Inbox** for the promotion.
 
+## Use a Neon database locally
+
+With a Neon project already linked to this checkout, run `npx neon@latest deploy` to apply [neon.ts](neon.ts) and pull the connection strings locally. Alternatively, copy the pooled Neon string into `DATABASE_URL` in `.env.local` and the direct string into `DATABASE_URL_UNPOOLED`. Keep both values private. The server uses the pooled connection for regular requests and `npm run db:setup` uses the direct connection when supplied. Set the optional bootstrap variables for demo data, then run `npm run db:setup` and `npm run dev`.
+
 ## Deploy to Vercel and Neon
 
-1. Create a [Neon free project](https://neon.com/pricing). Copy its pooled connection string to `DATABASE_URL` in your local `.env.local`. Keep that file out of Git.
+1. Create a [Neon free project](https://neon.com/pricing). Copy its pooled string to `DATABASE_URL` and its direct string to `DATABASE_URL_UNPOOLED` in your local `.env.local`. Keep that file out of Git.
 2. Set your bootstrap credentials locally and run `npm run db:setup` against Neon. Keep the bootstrap password private. Vercel only needs the database connection string.
 3. Push the code to a repository your Vercel account owns. In [Vercel](https://vercel.com/new), import the repository with the **Next.js** framework preset. Add the pooled `DATABASE_URL` as a Production environment variable, then deploy. Use a separate database or database branch if you enable Preview deployments.
 4. Open the resulting URL, verify that sample events are visible, then sign in and complete the registration demo above.
