@@ -54,6 +54,16 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
       await first.goto(draftUrl.href)
       await expect(first.getByRole('heading', { name: 'Event unavailable' })).toBeVisible()
 
+      await page.getByRole('link', { name: 'Approvals', exact: true }).click()
+      await page.getByRole('link', { name: 'Event rosters', exact: true }).click()
+      await page.getByRole('link', { name: title, exact: true }).click()
+      await expect(page.getByRole('heading', { name: 'Roster', exact: true })).toBeVisible()
+      await expect(page.getByText('No registrations yet.')).toBeVisible()
+      await first.goto(page.url())
+      await expect(first.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
+      await expect(first.getByText(title, { exact: true })).toHaveCount(0)
+      await page.goto(draftUrl.href)
+
       await page.getByRole('button', { name: 'Submit for approval' }).click()
       await expect(page.getByRole('status')).toHaveText('Submitted for approval.')
       await page.getByRole('link', { name: 'Approvals', exact: true }).click()
@@ -84,6 +94,11 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
       await expect(second.getByText(`A seat opened for ${title}. You’re confirmed.`)).toBeVisible()
       await second.goto(new URL('/?view=accounts', event).href)
       await expect(second.getByRole('heading', { name: 'Access restricted' })).toBeVisible()
+      const roster = new URL(event)
+      roster.searchParams.set('view','rosters')
+      await second.goto(roster.href)
+      await expect(second.getByRole('heading', { name: 'Access restricted' })).toBeVisible()
+      await expect(second.getByRole('table')).toHaveCount(0)
     })
   } finally {
     await Promise.all([firstContext.close(), secondContext.close()])
