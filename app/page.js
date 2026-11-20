@@ -281,10 +281,9 @@ export default async function Page({ searchParams }) {
   let content
   if (id) content = <EventDetail id={id} user={user} />
   else if (view === 'login' || view === 'signup') content = <Auth signup={view === 'signup'} returnId={optionalId(params.eventReturn)} />
-  else if (role && !user) content = <Auth />
   else if (role && !has(user,role)) {
     await audit({ query }, user, 'page_view', view, 'denied')
-    content = <Empty title="Access restricted">Your account doesn’t have access to this page.</Empty>
+    content = user ? <Empty title="Access restricted">Your account doesn’t have access to this page.</Empty> : <Auth />
   }
   else if (view === 'my') content = <MyEvents user={user} />
   else if (view === 'inbox') content = <Inbox user={user} />

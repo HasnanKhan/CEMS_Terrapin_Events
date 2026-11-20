@@ -49,6 +49,10 @@ Vercel Hobby is intended for personal, non-commercial use and has usage limits. 
 
 The app accepts up to 20 sign-in attempts per client IP and 10 combined registration or cancellation attempts per account in a rolling minute. Vercel supplies the trusted client IP. Local requests and deployments without a trusted IP share a fallback sign-in bucket. Apply schema changes with `npm run db:setup` before deploying a version that uses the request limits.
 
+## Security audit retention
+
+The app records sign-ins, account lockouts, authorization denials, rate-limit denials, role and activation changes, and event approvals in PostgreSQL. Vercel supplies the validated source IP when available. The app has no audit deletion or retention job. When operating the demo, retain the audit table and its backups for at least one year, including when replacing the Neon database. Verify the retention and restore procedure as part of release testing.
+
 ## Registration consistency
 
 Every registration, cancellation, and published capacity change locks the relevant event row in PostgreSQL before counting seats or changing the roster. A unique constraint prevents multiple active entries for the same user and event. Confirmed seat changes, FIFO promotion, and related inbox entries commit together. Session tokens are stored as hashes and expire after 30 minutes of inactivity.

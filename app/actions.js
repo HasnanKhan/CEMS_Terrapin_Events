@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { authenticate, currentUser, signOut, updateAccount } from '../lib/auth.js'
 import { changeEvent, changeRegistration, saveDraft } from '../lib/events.js'
-import { integer, optionalId, Problem } from '../lib/input.js'
+import { Problem } from '../lib/input.js'
 
 export async function submit(action, target, destination, previous, form) {
   let message
@@ -23,7 +23,7 @@ export async function submit(action, target, destination, previous, form) {
       const user = await currentUser()
       switch (action) {
         case 'save': {
-          const id = await saveDraft(user, optionalId(target), form)
+          const id = await saveDraft(user, target, form)
           path = '/?event=' + id
           message = 'Draft saved.'
           break
@@ -31,14 +31,14 @@ export async function submit(action, target, destination, previous, form) {
         case 'submit':
         case 'approve':
         case 'capacity':
-          message = await changeEvent(user, integer(target), action, form)
+          message = await changeEvent(user, target, action, form)
           break
         case 'register':
         case 'cancel':
           message = await changeRegistration(user, target, action === 'cancel')
           break
         case 'account':
-          await updateAccount(user, integer(target), form)
+          await updateAccount(user, target, form)
           message = 'Account updated.'
           break
         default:
