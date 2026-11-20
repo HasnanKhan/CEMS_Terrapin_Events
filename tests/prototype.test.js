@@ -13,6 +13,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
   assert.ok(['localhost', '127.0.0.1', '[::1]'].includes(url.hostname), 'Use an isolated local PostgreSQL database.')
   process.env.DATABASE_URL = url.href
   process.env.VERCEL = '1'
+  process.env.SELF_SIGNUP_ENABLED = 'true'
   const auth = await import('../lib/auth.js')
   const events = await import('../lib/events.js')
 
@@ -87,6 +88,21 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       await auth.signOut()
       assert.equal(await auth.currentUser(), null)
       assert.equal((await query('select id from accounts where id=$1 and failed=0 and locked_until is null', [created.id])).rowCount, 1)
+    })
+
+    await t.test('blocks public signup when paused and limits attempts separately from sign-in', async () => {
+      process.env.SELF_SIGNUP_ENABLED = 'false'
+      try {
+        await assert.rejects(auth.authenticate(credentials(email(9)), true), /currently unavailable/)
+      } finally {
+        process.env.SELF_SIGNUP_ENABLED = 'true'
+      }
+      assert.equal((await query('select 1 from accounts where email=$1', [email(9)])).rowCount, 0)
+      await assert.rejects(auth.authenticate(credentials(email(9)), true), /Too many requests/)
+      const record = await query("select 1 from audit_entries where action='signup' and outcome='rate_limited' and source_ip=$1", [ip])
+      assert.equal(record.rowCount, 1)
+      await auth.authenticate(credentials(email(0)), false)
+      await auth.signOut()
     })
 
     await t.test('FR-8–9 and FR-62 enforce role management and record actor, target, and outcome', async () => {
