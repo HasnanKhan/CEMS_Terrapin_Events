@@ -60,9 +60,9 @@ Rejection, resubmission, published event cancellation and completion, month and 
 
 | SRS ID | Current evidence | Remaining acceptance check |
 | --- | --- | --- |
-| NFR-1–2 | Build and workflows pass on local PostgreSQL and CI. | Measure 95th-percentile page latency at 3 seconds or less and registration response at 2 seconds or less with up to 100 concurrent users in a controlled environment. |
+| NFR-1–2 | Four 100-user runs met the SRS p95 thresholds for warmed server responses. The final build measured 223 ms for browse and 349 ms for registration or waitlisting, including its result page. [Controlled load verification](load-verification.md) | Measure hosted and browser-rendered latency in nonproduction. |
 | NFR-3, NFR-6 | An uncached database readiness endpoint is live. | Record availability, rehearse a restore into a separate database, and report recovery time and data loss. |
-| NFR-4–5 | Concurrent registration and FIFO promotion tests pass. | Repeat controlled concurrency runs and retain counts of overbookings, lost entries, and duplicates. |
+| NFR-4–5 | Each of four 100-user bursts produced 20 confirmed, 80 waitlisted, and three FIFO promotions, with zero overbookings or missing or duplicate registrations. [Controlled load verification](load-verification.md) | Repeat on hosted nonproduction infrastructure before using these measurements to assess deployment capacity. |
 | NFR-7 | Simulated notices are written in the registration transaction. | Record timing from trigger to inbox visibility and verify the required 99% within five minutes. |
 | NFR-8 | Changes and cancellations with live delivery and retries are full-system scope. | Validate with the notification pipeline if those features are added. |
 | NFR-9 | New hashes use Argon2id. The production demo audit confirmed zero legacy hashes after upgrading the bootstrap account. [Password tests](../tests/password.test.js) | Review password handling if the identity model changes. |
