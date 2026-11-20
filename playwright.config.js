@@ -6,6 +6,12 @@ if (!['postgres:', 'postgresql:'].includes(database.protocol) ||
   throw new Error('Set TEST_DATABASE_URL to an isolated PostgreSQL database on localhost.')
 }
 
+const runtimeDatabase = new URL(process.env.TEST_RUNTIME_DATABASE_URL ?? database.href)
+if (runtimeDatabase.protocol !== database.protocol ||
+    runtimeDatabase.host !== database.host || runtimeDatabase.pathname !== database.pathname) {
+  throw new Error('TEST_RUNTIME_DATABASE_URL must target the same isolated test database.')
+}
+
 const baseURL = 'http://localhost:3117'
 export default defineConfig({
   testDir: './tests/browser',
@@ -23,7 +29,7 @@ export default defineConfig({
     timeout: 30000,
     reuseExistingServer: false,
     env: {
-      DATABASE_URL: database.href,
+      DATABASE_URL: runtimeDatabase.href,
       DATABASE_URL_UNPOOLED: database.href,
       BOOTSTRAP_EMAIL: 'browser-coordinator@umd.edu',
       BOOTSTRAP_PASSWORD: 'BrowserCoordinatorTest1',

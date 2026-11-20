@@ -45,6 +45,14 @@ With a Neon project already linked to this checkout, run `npx neon@latest deploy
 
 Vercel Hobby is intended for personal, non-commercial use and has usage limits. See [Vercel Hobby](https://vercel.com/docs/plans/hobby) and [Neon connection pooling](https://neon.com/docs/connect/connection-pooling).
 
+## Database runtime role
+
+The schema owner applies migrations through the direct `DATABASE_URL_UNPOOLED` connection. Configure the app to use a separate `terrapin_runtime` login with explicit grants in [runtime-grants.sql](lib/runtime-grants.sql). It can write audit entries and cannot read, update, delete, or truncate them or create objects in the public schema.
+
+After initializing the target database, run `npm run db:provision-runtime` once from a checkout configured with the schema-owner direct and pooled URLs. This creates the restricted role and writes its pooled connection string to the ignored `.env.runtime.local` file with owner-only permissions. The command refuses to replace an existing credential file or login. Verify the restricted role against an isolated database before setting the Vercel Production `DATABASE_URL` to its pooled URL. Keep the direct owner connection out of Vercel. The old deployment can continue to use its existing connection until the verified cutover.
+
+To exercise the split locally, set `TEST_DATABASE_URL` to an isolated local schema-owner connection and `TEST_RUNTIME_DATABASE_URL` to the restricted connection for that same database. Run `npm run test:browser`. Fixtures and schema setup use the test owner and the app uses the restricted role.
+
 ## Request limits
 
 The app accepts up to five signup attempts and 20 sign-in attempts per client IP and 10 combined registration or cancellation attempts per account in a rolling minute. Vercel supplies the trusted client IP. Local requests and deployments without a trusted IP share a fallback sign-in bucket. Apply schema changes with `npm run db:setup` before deploying a version that uses the request limits. Set `SELF_SIGNUP_ENABLED=false` on Vercel and redeploy to pause public account creation while existing users continue to sign in. Demo signup checks email format only. Use a verified identity provider before collecting real university records.
