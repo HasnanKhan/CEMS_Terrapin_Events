@@ -3,6 +3,7 @@ import { audit, currentUser, extraRoles, selfSignupEnabled } from '../lib/auth.j
 import { query } from '../lib/db.js'
 import { approvalQueue, categories, eventsPerPage, getEvent, organizerEvents, publicEvents, registration, registrations, roster, rosterEvents, venues } from '../lib/events.js'
 import { optionalId } from '../lib/input.js'
+import { actionFeedback } from './feedback.js'
 import Form, { ActionNotice } from './form.js'
 import { authPath, browseFilters, browsePath, eventPath, pageRoute } from './navigation.js'
 
@@ -369,7 +370,7 @@ export async function generateMetadata({ searchParams }) {
 
 export default async function Page({ searchParams }) {
   const params = await searchParams
-  const user = await currentUser()
+  const [user, feedback] = await Promise.all([currentUser(), actionFeedback(params)])
   const { view, id, role } = pageRoute(params)
   let content
   if (id && view !== 'rosters') content = <EventDetail id={id} user={user} filters={browseFilters(params)} />
@@ -389,7 +390,7 @@ export default async function Page({ searchParams }) {
     <a className="skip" href="#main">Skip to content</a>
     <Header user={user} view={view === 'rosters' ? 'queue' : id ? 'event' : view} />
     <main id="main" className="wrap" tabIndex={-1}>
-      {typeof params.notice === 'string' && <ActionNotice message={params.notice.slice(0, 160)} />}
+      {feedback && <ActionNotice key={params.feedback} message={feedback} />}
       {content}
     </main>
     <footer className="footer"><div><strong>Terrapin Events</strong><span>University of Maryland course demo</span></div></footer>

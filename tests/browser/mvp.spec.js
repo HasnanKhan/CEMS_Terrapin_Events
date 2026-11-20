@@ -52,7 +52,7 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
       await page.getByRole('button', { name: 'Save draft' }).click()
       await expect(page.getByRole('status')).toHaveText('Draft saved.')
       const draftUrl = new URL(page.url())
-      draftUrl.searchParams.delete('notice')
+      draftUrl.searchParams.delete('feedback')
       await first.goto(draftUrl.href)
       await expect(first.getByRole('heading', { name: 'Event unavailable' })).toBeVisible()
 
@@ -75,7 +75,7 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
     })
 
     const event = new URL(page.url())
-    event.searchParams.delete('notice')
+    event.searchParams.delete('feedback')
     await test.step('FR-1–9, FR-26–33, FR-37, FR-39–40: signup, register, and promote from the waitlist', async () => {
       const search = new URL('/?q=' + encodeURIComponent(title) + '&category=Academic', event)
       await first.goto(search.href)
