@@ -53,6 +53,37 @@ create table if not exists notifications (
   created_at timestamptz not null default now(),
   delivered_at timestamptz not null default now()
 );
+create table if not exists rate_limits (
+  scope text not null,
+  subject text not null,
+  attempts timestamptz[] not null,
+  last_seen timestamptz not null,
+  primary key (scope, subject)
+);
+create index if not exists rate_limits_last_seen on rate_limits(last_seen);
+
+create or replace function consume_rate_limit(p_scope text, p_subject text, p_limit integer)
+returns boolean language plpgsql as $$
+declare
+  checked_at timestamptz;
+  recent timestamptz[];
+begin
+  perform pg_advisory_xact_lock(hashtextextended(p_scope || ':' || p_subject, 0));
+  checked_at := clock_timestamp();
+  select array(select attempt from unnest(attempts) as attempt
+    where attempt > checked_at - interval '1 minute')
+    into recent from rate_limits where scope=p_scope and subject=p_subject;
+  if cardinality(recent) >= p_limit then
+    return false;
+  end if;
+  insert into rate_limits(scope, subject, attempts, last_seen)
+    values(p_scope, p_subject, array_append(recent, checked_at), checked_at)
+    on conflict (scope, subject) do update
+      set attempts=excluded.attempts, last_seen=excluded.last_seen;
+  return true;
+end;
+$$;
+
 create table if not exists audit_entries (
   id integer generated always as identity primary key,
   actor_id integer references accounts(id),
