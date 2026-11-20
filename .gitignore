@@ -6,3 +6,5 @@ node_modules/
 .neon
 
 coverage/
+test-results/
+playwright-report/

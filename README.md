@@ -77,3 +77,11 @@ Integration tests skip when `TEST_DATABASE_URL` is absent and reject remote host
 | NFR-18 | Trusted client IP, concurrent rolling request limits, window expiry |
 
 This matrix lists the requirements exercised by this suite. Grade or release verification also needs browser, accessibility, security, and load evidence.
+
+GitHub Actions runs the backend tests and the coverage gate against a disposable PostgreSQL service, builds the app, and runs the Chromium workflow. The browser test covers draft approval, guest visibility, signup and return-to-event navigation, waitlist promotion, inbox delivery, and a 360 px event page. To run it locally, keep `TEST_DATABASE_URL` pointed at a dedicated localhost test database. The browser suite creates temporary demo accounts and events in that database.
+
+```sh
+npx playwright install chromium
+npm run build
+npm run test:browser
+```

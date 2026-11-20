@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  prototype:
+    name: PostgreSQL and Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: terrapin
+          POSTGRES_PASSWORD: terrapin_test
+          POSTGRES_DB: terrapin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U terrapin -d terrapin_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://terrapin:terrapin_test@127.0.0.1:5432/terrapin_test
+      DATABASE_URL: postgresql://terrapin:terrapin_test@127.0.0.1:5432/terrapin_test
+      DATABASE_URL_UNPOOLED: postgresql://terrapin:terrapin_test@127.0.0.1:5432/terrapin_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:setup
+      - run: npm run test:coverage
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
