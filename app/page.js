@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { audit, currentUser, extraRoles, selfSignupEnabled } from '../lib/auth.js'
 import { query } from '../lib/db.js'
-import { approvalQueue, categories, eventsPerPage, getEvent, organizerEvents, publicEvents, registration, registrations, roster, venues } from '../lib/events.js'
+import { approvalQueue, categories, eventsPerPage, getEvent, organizerEvents, publicEvents, registration, registrations, roster, rosterEvents, venues } from '../lib/events.js'
 import { optionalId } from '../lib/input.js'
 import Form from './form.js'
 
@@ -15,6 +15,7 @@ const statusLabel = { draft: 'Draft', pending: 'Pending approval', published: 'P
 const roleLabel = { organizer: 'Organizer', administrator: 'Administrator', system_admin: 'System administrator' }
 const has = (user, role) => user?.roles.includes(role)
 const eventPath = id => '/?event=' + id
+const rosterPath = id => '/?view=rosters' + (id ? '&event=' + id : '')
 const authPath = (view, eventId) => '/?' + new URLSearchParams({
   view, ...(eventId ? { eventReturn: String(eventId) } : {})
 })
@@ -175,7 +176,7 @@ async function EventDetail({ id, user }) {
   const open = event.deadline > new Date()
   const [entry, people] = await Promise.all([
     published && user ? registration(user, id) : { rows: [] },
-    owner || (administrator && published) ? roster(id) : { rows: [] }
+    owner || (administrator && published) ? roster(id,user) : null
   ])
   const enrolled = entry.rows[0]
   const path = eventPath(id)
@@ -206,10 +207,46 @@ async function EventDetail({ id, user }) {
       </aside>
     </div>
     {owner && event.status === 'draft' && <EventForm event={event} />}
-    {(owner || (administrator && published)) && <section className="panel roster"><h2>Roster</h2>
-      {people.rows.length ? <div className="table-scroll"><table><thead><tr><th>Name</th><th>Email</th><th>Registered</th><th>Status</th></tr></thead><tbody>
-        {people.rows.map(person => <tr key={person.email}><td>{person.name}</td><td>{person.email}</td><td>{dateText(person.created_at)} ET</td><td><Badge status={person.status} /></td></tr>)}
-      </tbody></table></div> : <p>No registrations yet.</p>}</section>}
+    {people && <RosterTable rows={people.rows} />}
+  </>
+}
+
+function RosterTable({ rows }) {
+  return <section className="panel roster"><h2>Roster</h2>
+    {rows.length ? <div className="table-scroll"><table><thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Registered</th><th scope="col">Status</th></tr></thead><tbody>
+      {rows.map(person => <tr key={person.email}><td>{person.name}</td><td>{person.email}</td><td>{dateText(person.created_at)} ET</td><td><Badge status={person.status} /></td></tr>)}
+    </tbody></table></div> : <p>No registrations yet.</p>}</section>
+}
+
+async function Rosters({ user, id, page }) {
+  if (id) {
+    const data = await roster(id,user)
+    if (!data) return <Empty title="Roster unavailable">Check the event link and try again.</Empty>
+    return <>
+      <Link className="back" href={rosterPath()}>All event rosters</Link>
+      <PageHeading title={data.event.title} description={dateText(data.event.starts_at) + ' ET'}>
+        <Badge status={data.event.status} />
+      </PageHeading>
+      <RosterTable rows={data.rows} />
+    </>
+  }
+
+  const { rows } = await rosterEvents(user,page)
+  return <>
+    <Link className="back" href="/?view=queue">Approval queue</Link>
+    <PageHeading title="Event rosters" description="View registrations for drafts, pending approvals, and published events." />
+    {rows.length ? <ul className="rows">{rows.slice(0,eventsPerPage).map(event =>
+      <li key={event.id} className="row">
+        <div><Link href={rosterPath(event.id)} className="row-title">{event.title}</Link>
+          <p>{dateText(event.starts_at)} ET</p></div>
+        <Badge status={event.status} />
+      </li>
+    )}</ul> : <Empty title="No events on this page" />}
+    {(page > 1 || rows.length > eventsPerPage) && <nav className="pagination" aria-label="Roster pages">
+      {page > 1 && <Link className="button quiet" href={rosterPath() + '&page=' + (page - 1)}>Previous</Link>}
+      <span>Page {page}</span>
+      {rows.length > eventsPerPage && <Link className="button quiet" href={rosterPath() + '&page=' + (page + 1)}>Next</Link>}
+    </nav>}
   </>
 }
 
@@ -239,7 +276,9 @@ function EventList({ rows, empty, queue = false }) {
 async function Queue({ owner }) {
   const [list, owners] = await Promise.all([approvalQueue(owner), query(`select distinct a.id,a.name,a.email from accounts a
     join events e on e.owner_id=a.id where e.status='pending' order by a.name,a.email`)])
-  return <><PageHeading title="Approval queue" description="Review submissions in the order they were received." />
+  return <><PageHeading title="Approval queue" description="Review submissions in the order they were received.">
+      <Link className="button quiet" href={rosterPath()}>Event rosters</Link>
+    </PageHeading>
     <form className="filter"><input type="hidden" name="view" value="queue" /><label>Organizer<select name="owner" defaultValue={owner ?? ''}>
       <option value="">All organizers</option>{owners.rows.map(item => <option key={item.id} value={item.id}>{item.name} · {item.email}</option>)}
     </select></label><button className="button quiet">Apply filter</button></form>
@@ -283,24 +322,25 @@ export default async function Page({ searchParams }) {
   const user = await currentUser()
   const view = typeof params.view === 'string' ? params.view : 'events'
   const id = optionalId(params.event)
-  const required = { my: 'attendee', inbox: 'attendee', organize: 'organizer', queue: 'administrator', accounts: 'system_admin' }
+  const required = { my: 'attendee', inbox: 'attendee', organize: 'organizer', queue: 'administrator', rosters: 'administrator', accounts: 'system_admin' }
   const role = Object.hasOwn(required,view) ? required[view] : null
   let content
-  if (id) content = <EventDetail id={id} user={user} />
+  if (id && view !== 'rosters') content = <EventDetail id={id} user={user} />
   else if (view === 'login' || view === 'signup') content = <Auth signup={view === 'signup'} returnId={optionalId(params.eventReturn)} />
   else if (role && !has(user,role)) {
-    await audit({ query }, user, 'page_view', view, 'denied')
+    await audit({ query }, user, view === 'rosters' && id ? 'roster_view' : 'page_view', view === 'rosters' && id ? id : view, 'denied')
     content = user ? <Empty title="Access restricted">Your account doesn’t have access to this page.</Empty> : <Auth />
   }
   else if (view === 'my') content = <MyEvents user={user} />
   else if (view === 'inbox') content = <Inbox user={user} />
   else if (view === 'organize') content = <Organizer user={user} create={params.create === '1'} />
   else if (view === 'queue') content = <Queue owner={optionalId(params.owner)} />
+  else if (view === 'rosters') content = <Rosters user={user} id={id} page={optionalId(params.page) ?? 1} />
   else if (view === 'accounts') content = <Accounts />
   else content = <Explore params={params} />
   return <>
     <a className="skip" href="#main">Skip to content</a>
-    <Header user={user} view={id ? 'event' : view} />
+    <Header user={user} view={view === 'rosters' ? 'queue' : id ? 'event' : view} />
     <main id="main" className="wrap">
       {typeof params.notice === 'string' && <p className="notice" role="status">{params.notice.slice(0, 160)}</p>}
       {content}
