@@ -14,7 +14,7 @@ The SRS prototype boundary drives feature scope. The implementation uses a React
 
 ## Run locally
 
-Use Node.js 22 and a PostgreSQL database. For a local database with Docker:
+Use Node.js 24 LTS and a PostgreSQL database. The version in `.nvmrc` also sets the GitHub Actions runtime, and `package.json` pins Vercel to the same major version. For a local database with Docker:
 
 ```sh
 docker run --name terrapin-postgres -d -p 127.0.0.1:5432:5432 \
