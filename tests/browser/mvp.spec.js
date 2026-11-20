@@ -65,6 +65,9 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
     const event = new URL(page.url())
     event.searchParams.delete('notice')
     await test.step('FR-1–9, FR-26–33, FR-37, FR-39–40: signup, register, and promote from the waitlist', async () => {
+      await first.goto(new URL('/?q=' + encodeURIComponent(title), event).href)
+      const eventLink = first.getByRole('link', { name: 'View event: ' + title, exact: true })
+      await expect(eventLink).toHaveText('View event')
       await signUpForEvent(first, event.href, `browser-first-${id}@umd.edu`)
       await expect(first.getByRole('heading', { name: title })).toBeVisible()
       expect(await first.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
