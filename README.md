@@ -2,6 +2,8 @@
 
 Terrapin Events is a University of Maryland course demo with public event browsing, a coordinator approval workflow, and capacity-limited registration backed by PostgreSQL.
 
+The [Spring backend](backend/README.md) runs alongside the deployed MVP during the migration to the documented architecture.
+
 ## MVP
 
 - Guests can search upcoming published events, filter by category and venue, and view venue, time, capacity, and registration deadlines.
