@@ -86,3 +86,16 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
     await Promise.all([firstContext.close(), secondContext.close()])
   }
 })
+
+test('account pages provide browser isolation and discourage caching', async ({ request }) => {
+  const response = await request.get('/?view=login')
+  expect(response.ok()).toBeTruthy()
+  expect(response.headers()).toMatchObject({
+    'x-frame-options': 'DENY',
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'strict-origin-when-cross-origin',
+    'permissions-policy': 'camera=(), microphone=(), geolocation=()'
+  })
+  expect(response.headers()['content-security-policy']).toContain("frame-ancestors 'none'")
+  expect(response.headers()['cache-control']).toContain('no-store')
+})
