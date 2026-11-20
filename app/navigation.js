@@ -22,7 +22,7 @@ export function pageRoute(params) {
 
 export function browseFilters(params) {
   return {
-    keyword: typeof params.q === 'string' ? params.q.trim().slice(0, 100) : '',
+    keyword: typeof params.q === 'string' ? params.q.replaceAll('\0', '').trim().slice(0, 100) : '',
     category: categories.includes(params.category) ? params.category : '',
     venue: optionalId(params.venue),
     page: optionalId(params.page) ?? 1

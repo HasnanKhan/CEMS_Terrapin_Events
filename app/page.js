@@ -3,6 +3,7 @@ import { audit, currentUser, extraRoles, selfSignupEnabled } from '../lib/auth.j
 import { query } from '../lib/db.js'
 import { approvalQueue, categories, eventsPerPage, getEvent, organizerEvents, publicEvents, registration, registrations, roster, rosterEvents, venues } from '../lib/events.js'
 import { optionalId } from '../lib/input.js'
+import { springDirectory, SpringCatalogUnavailable } from '../lib/spring-catalog.js'
 import { actionFeedback } from './feedback.js'
 import Form, { ActionNotice } from './form.js'
 import { authPath, browseFilters, browsePath, eventPath, pageRoute } from './navigation.js'
@@ -51,13 +52,29 @@ function SeatAvailability({ event, now = new Date() }) {
 
 const categoryThemes = { Technology: 'tech', 'Arts & Culture': 'arts', Community: 'community', Academic: 'academic', 'Sports & Recreation': 'sports' }
 
-async function Explore({ params }) {
-  const { keyword, category, venue: venueId, page } = browseFilters(params)
+async function postgresDirectory(filters) {
   const { rows: locations } = await venues()
-  const venue = locations.find(location => location.id === venueId)?.id ?? null
-  const filters = { keyword, category, venue, page }
-  const { rows: results } = await publicEvents(filters)
-  const rows = results.slice(0, eventsPerPage)
+  const venue = locations.find(location => location.id === filters.venue)?.id ?? null
+  const search = { ...filters, venue }
+  const { rows } = await publicEvents(search)
+  return { locations, filters: search, rows: rows.slice(0, eventsPerPage), hasNext: rows.length > eventsPerPage }
+}
+
+async function Explore({ params }) {
+  const requested = browseFilters(params)
+  const spring = process.env.SPRING_CATALOG_URL?.trim()
+  const directory = await (spring ? springDirectory(spring, requested) : postgresDirectory(requested)).catch(error => {
+    if (!(error instanceof SpringCatalogUnavailable)) throw error
+    console.error('Spring catalog unavailable')
+    return null
+  })
+  if (!directory) {
+    return <><PageHeading title="Upcoming events" />
+      <Empty title="Event directory temporarily unavailable" heading="h2">Refresh the page to try again.</Empty>
+    </>
+  }
+  const { locations, filters, rows, hasNext } = directory
+  const { keyword, category, venue, page } = filters
   const filtered = Boolean(keyword || category || venue)
   const showHero = !filtered && page === 1
   const Heading = showHero ? 'h2' : 'h1'
@@ -75,7 +92,7 @@ async function Explore({ params }) {
     </section>}
     <section className={showHero ? 'section' : undefined} aria-labelledby="upcoming">
       <div className="section-heading"><Heading id="upcoming" tabIndex={-1}>Upcoming events</Heading>{rows.length > 0 &&
-        <p className="section-count">{rows.length} {rows.length === 1 ? 'event' : 'events'}{(page > 1 || results.length > eventsPerPage) && ' on this page'}</p>}</div>
+        <p className="section-count">{rows.length} {rows.length === 1 ? 'event' : 'events'}{(page > 1 || hasNext) && ' on this page'}</p>}</div>
       <form action={browsePath()} method="get" className="event-filter" key={browsePath({ ...filters, page: 1 })}>
         <label>Search events<input type="search" name="q" placeholder="Search by title or description" defaultValue={keyword} maxLength={100} /></label>
         <label>Category<select name="category" defaultValue={category}><option value="">All categories</option>
@@ -100,10 +117,10 @@ async function Explore({ params }) {
             ? <Link href={browsePath({ ...filters, page: 1 })}>Return to the first page of results</Link>
             : 'Try another keyword or change your filters.'}</Empty>
           : <Empty title="No upcoming events">Published events will appear here.</Empty>}
-      {(page > 1 || results.length > eventsPerPage) && <nav className="pagination" aria-label="Event pages">
+      {(page > 1 || hasNext) && <nav className="pagination" aria-label="Event pages">
         {page > 1 && <Link className="button quiet" href={browsePath({ ...filters, page: page - 1 })}>Previous</Link>}
         <span>Page {page}</span>
-        {results.length > eventsPerPage && <Link className="button quiet" href={browsePath({ ...filters, page: page + 1 })}>Next</Link>}
+        {hasNext && <Link className="button quiet" href={browsePath({ ...filters, page: page + 1 })}>Next</Link>}
       </nav>}
     </section>
   </>

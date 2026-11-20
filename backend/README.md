@@ -20,6 +20,16 @@ The catalog login reads two owner-managed PostgreSQL views. The published-event 
 
 When upgrading an existing Spring catalog database, take the Spring instance out of service, apply the updated grant script as owner, and start the matching JAR. The script revokes the grants used by the older Spring binary. The existing Next.js directory can serve traffic during the upgrade and rollback.
 
+## Stage the event directory
+
+Start Spring against the same PostgreSQL database as the staging Next.js app, using the separate catalog login. Set `SPRING_CATALOG_URL` in the Next.js server environment to the Spring origin. For local development use `http://127.0.0.1:8080`. Hosted staging requires an HTTPS origin. Restart Next.js after changing it.
+
+This setting switches the Explore event list and venue filter to Spring. Event details and authenticated workflows still use their existing Next.js services. If Spring is unavailable, Explore shows a temporary error. Clear the setting and restart or redeploy Next.js to switch the listing back to PostgreSQL reads through Next.js.
+
+Monitor Spring's readiness probe separately in staging. The Next.js `/api/health` route checks its PostgreSQL connection.
+
 ## Verify
 
 Apply the [catalog test fixtures](src/test/resources/catalog-fixtures.sql) as the owner of a fresh disposable local PostgreSQL database with the schema and grants above. Run `./mvnw verify` from `backend` with that database's catalog login. GitHub Actions runs the same checks on an isolated PostgreSQL 16 service. Spring and Hibernate schema initialization remain disabled.
+
+The Spring CI workflow also runs Chromium against both services. Its Next.js database omits the Spring-only fixtures, which verifies that results come from Spring. It repeats the browser check with Spring stopped to verify the outage message.
