@@ -67,7 +67,7 @@ Rejection, resubmission, published event cancellation and completion, month and 
 | NFR-8 | Changes and cancellations with live delivery and retries are full-system scope. | Validate with the notification pipeline if those features are added. |
 | NFR-9 | New hashes use Argon2id. The production demo audit confirmed zero legacy hashes after upgrading the bootstrap account. [Password tests](../tests/password.test.js) | Review password handling if the identity model changes. |
 | NFR-10 | Production redirected HTTP with status 308 and returned HTTP 200 over a connection constrained to TLS 1.2. HSTS was present in the header audit. | Confirm the minimum allowed protocol in the deployment policy and retain the evidence. |
-| NFR-11 | Audited denials are covered by the integration suite. | Verify all access denials and record the one-year retention and restore procedure. |
+| NFR-11 | Audited denials and insert-only audit grants for the restricted runtime role are covered by PostgreSQL tests. | Verify the production credential cutover and all access denials and record the one-year retention and restore procedure. |
 | NFR-12 | Dependency audit, browser isolation headers, and current role and input checks. | Run a passive application security scan and retain findings. Complete the defensive injection, XSS, and CSRF verification cases in an isolated environment. |
 | NFR-13 | Server actions delegate to authentication, event, and database modules. The regression suite covers the main workflows. | Record QA-07 change-isolation evidence and complete the design-to-code mapping for submission. |
 | NFR-14 | Browser automation demonstrates the happy path. | Time first-time student participants. At least 90% must find and register for the event within two minutes. |

@@ -46,7 +46,12 @@ jobs:
       - run: npm run test:coverage
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
+      - name: Run Chromium with the restricted database role
+        env:
+          RUNTIME_ENV_FILE: ${{ runner.temp }}/terrapin-runtime.env
+        run: |
+          npm run db:provision-runtime
+          TEST_RUNTIME_DATABASE_URL="$(env -u DATABASE_URL node --env-file="$RUNTIME_ENV_FILE" -p 'process.env.DATABASE_URL')" npm run test:browser
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
