@@ -12,10 +12,13 @@ Send a GET request to `/actuator/health/liveness` to check whether the service i
 
 ## Public event API
 
-- `GET /api/events` returns `events`, `page`, and `hasNext`. It lists up to 12 published events that have yet to end, ordered by start time and event ID. The optional `q` filter matches a case-insensitive literal substring in the title or description. The optional `category` and `venue` filters match the exact category and numeric venue ID. Page numbers start at 1. Invalid filter values return HTTP 400.
+- `GET /api/events` returns `events`, `page`, and `hasNext`. It lists up to 12 published events that have yet to end, ordered by start time and event ID. The optional `q` filter matches a case-insensitive literal substring in the title or description. The optional `category` and `venue` filters match the exact category and numeric venue ID. Page numbers start at 1. Invalid or repeated filter values return HTTP 400.
 - `GET /api/events/{id}` returns one published event with its registration deadline, capacity, confirmed count, and waitlist count. Past published events remain available by ID. Drafts, pending events, and missing events all return HTTP 404.
+- `GET /api/venues` returns an array of public venue IDs and names, ordered by name.
 
-The API returns public event fields. The catalog login can read only the required event, venue, and registration columns. The deployed Next.js application still serves its existing catalog while the Spring API is evaluated.
+The catalog login reads two owner-managed PostgreSQL views. The published-event view filters drafts and pending events at the database layer. The catalog login has no direct privileges on the underlying tables. The API returns an empty HTTP 503 when it cannot read the catalog.
+
+When upgrading an existing Spring catalog database, take the Spring instance out of service, apply the updated grant script as owner, and start the matching JAR. The script revokes the grants used by the older Spring binary. The existing Next.js directory can serve traffic during the upgrade and rollback.
 
 ## Verify
 

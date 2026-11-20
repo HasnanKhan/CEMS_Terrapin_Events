@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 
 import java.time.Instant;
@@ -74,10 +77,42 @@ class CatalogHttpTest {
 
     @Test
     void rejectsInvalidFilters() {
-        for (String query : new String[]{"page=0", "page=abc", "venue=0", "category=invalid", "q=" + "a".repeat(101)}) {
+        for (String query : new String[]{"page=0", "page=abc", "venue=0", "category=invalid", "q=" + "a".repeat(101),
+                "q=one&q=two", "category=Academic&category=Community", "venue=1&venue=2", "page=1&page=2",
+                "unknown=value"}) {
             assertThat(http.getForEntity("/api/events?" + query, String.class).getStatusCode())
                     .isEqualTo(HttpStatus.BAD_REQUEST);
         }
+        var invalidSearch = http.getForEntity("/api/events?q={term}", String.class, "control\0value");
+        assertThat(invalidSearch.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(invalidSearch.getBody()).isNull();
+    }
+
+    @Test
+    void listsOnlyPublicVenueFieldsAndDeniesVenueWrites() {
+        JsonNode venues = json("/api/venues");
+        assertThat(venues).extracting(venue -> venue.path("name").asText()).containsExactly(
+                "Catalog fixture hall", "Catalog fixture studio", "Hornbake Library",
+                "Iribe Center", "McKeldin Library", "Stamp Student Union");
+        for (JsonNode venue : venues) {
+            assertThat(venue.fieldNames()).toIterable().containsExactlyInAnyOrder("id", "name");
+            assertThat(venue.path("id").asInt()).isPositive();
+        }
+        assertThat(http.postForEntity("/api/venues", null, String.class).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void keepsResponsesUncachedAndDisallowsCrossOriginPreflight() {
+        var venues = http.getForEntity("/api/venues", String.class);
+        assertThat(venues.getHeaders().getCacheControl()).contains("no-store");
+        assertThat(venues.getHeaders().getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
+        var headers = new HttpHeaders();
+        headers.setOrigin("https://other.example");
+        headers.setAccessControlRequestMethod(HttpMethod.GET);
+        var preflight = http.exchange("/api/venues", HttpMethod.OPTIONS, new HttpEntity<>(headers), String.class);
+        assertThat(preflight.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(preflight.getHeaders().getAccessControlAllowOrigin()).isNull();
     }
 
     private JsonNode json(String path, Object... variables) {

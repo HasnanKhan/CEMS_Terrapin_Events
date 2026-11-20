@@ -16,7 +16,7 @@ class SecurityConfig {
                 .authorizeHttpRequests(access -> access
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/events", "/api/events/{id:[0-9]+}").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/events", "/api/events/{id:[0-9]+}", "/api/venues").permitAll()
                         .anyRequest().denyAll())
                 .build();
     }

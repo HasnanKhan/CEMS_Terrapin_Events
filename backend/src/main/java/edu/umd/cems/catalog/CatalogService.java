@@ -27,6 +27,13 @@ class CatalogService {
         return repository.findPublishedEvent(id).map(PublicEvent::from);
     }
 
+    List<PublicVenue> venues() {
+        return repository.findVenues().stream().map(row -> new PublicVenue(row.getId(), row.getName())).toList();
+    }
+
     record CatalogPage(List<PublicEvent> events, int page, boolean hasNext) {
+    }
+
+    record PublicVenue(int id, String name) {
     }
 }

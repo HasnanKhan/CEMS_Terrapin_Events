@@ -29,4 +29,13 @@ class DatabaseUnavailableTest {
         assertThat(readiness.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
         assertThat(readiness.getBody().toString()).isEqualTo("{\"status\":\"DOWN\"}");
     }
+
+    @Test
+    void returnsAnEmpty503FromTheCatalogIfTheDatabaseIsDown() {
+        for (String path : new String[]{"/api/events", "/api/events/820001", "/api/venues"}) {
+            var response = http.getForEntity(path, String.class);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+            assertThat(response.getBody()).isNull();
+        }
+    }
 }
