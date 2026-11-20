@@ -12,6 +12,15 @@ if (runtimeDatabase.protocol !== database.protocol ||
   throw new Error('TEST_RUNTIME_DATABASE_URL must target the same isolated test database.')
 }
 
+const springCatalog = process.env.TEST_SPRING_CATALOG_URL ?? ''
+if (springCatalog) {
+  const origin = new URL(springCatalog)
+  if (origin.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname)
+    || origin.href !== origin.origin + '/') {
+    throw new Error('Set TEST_SPRING_CATALOG_URL to an isolated HTTP origin on localhost.')
+  }
+}
+
 const baseURL = 'http://localhost:3117'
 export default defineConfig({
   testDir: './tests/browser',
@@ -34,7 +43,8 @@ export default defineConfig({
       BOOTSTRAP_EMAIL: 'browser-coordinator@umd.edu',
       BOOTSTRAP_PASSWORD: 'BrowserCoordinatorTest1',
       SEED_DEMO: 'false',
-      SELF_SIGNUP_ENABLED: 'true'
+      SELF_SIGNUP_ENABLED: 'true',
+      SPRING_CATALOG_URL: springCatalog
     }
   }
 })
