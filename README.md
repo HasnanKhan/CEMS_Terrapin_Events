@@ -85,3 +85,20 @@ npx playwright install chromium
 npm run build
 npm run test:browser
 ```
+
+## Production readiness audit
+
+The deployed application uses HTTPS and serves dynamic pages with no shared caching. The last production smoke test verified signup, sign-in, registration, cancellation, and inbox delivery against Neon. GitHub Actions verifies the app against PostgreSQL and Chromium. The dependency audit found no known vulnerabilities at the time of review.
+
+For a demo, use fictional records. The public signup controls and browser isolation headers reduce exposure, and `GET /api/health` checks database connectivity. Readiness returns HTTP 200 with `{"status":"ok"}` or HTTP 503 with `{"status":"unavailable"}`. Point an uptime monitor at this endpoint and route alerts to the maintainer. Choose a cadence consistent with the database compute budget, since probes can keep a sleeping database awake.
+
+Before a pilot with real users:
+
+| Priority | Open item | Acceptance evidence |
+| --- | --- | --- |
+| Release gate | Verified identity and administrator MFA | Use an approved university identity provider, define role assignment and recovery, and test both access grants and revocation. Treat existing demo accounts as unverified. |
+| Release gate | Student data and audit policy | Establish approved data collection, roster access, privacy notice, deletion process, and audit retention. Keep real data in an approved environment. |
+| Release gate | Incident response and recovery | Assign alert ownership, verify monitoring and error alert delivery, and rehearse restoring into an isolated database. Record recovery time and data loss. |
+| High | Release controls | Protect `main` when the repository plan permits it, require passing CI and an independent reviewer, and keep preview data separate from production. The audited repository did not protect `main`. |
+| High | Accessibility and capacity | Run WCAG 2.1 AA checks with keyboard and assistive technology. Use a staging database to measure the documented concurrency and latency targets. |
+| High | Script security policy | Trial a nonce-based script policy in report-only mode and verify hydration, authentication, and any identity-provider callbacks before enforcing it. |
