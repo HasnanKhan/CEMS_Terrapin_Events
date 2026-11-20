@@ -35,7 +35,7 @@ export async function submit(action, target, destination, previous, form) {
           break
         case 'register':
         case 'cancel':
-          message = await changeRegistration(user, integer(target), action === 'cancel')
+          message = await changeRegistration(user, target, action === 'cancel')
           break
         case 'account':
           await updateAccount(user, integer(target), form)
