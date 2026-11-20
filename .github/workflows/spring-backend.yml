@@ -1,0 +1,56 @@
+name: Spring backend
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Java 21 and PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: terrapin
+          POSTGRES_PASSWORD: terrapin_test
+          POSTGRES_DB: terrapin_spring_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U terrapin -d terrapin_spring_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CEMS_DB_URL: jdbc:postgresql://127.0.0.1:5432/terrapin_spring_test
+      CEMS_DB_USER: terrapin_runtime
+      CEMS_DB_PASSWORD: terrapin_runtime_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Prepare disposable PostgreSQL
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          {
+            cat lib/schema.sql
+            printf "\nCREATE ROLE terrapin_runtime LOGIN PASSWORD 'terrapin_runtime_test';\n"
+            cat lib/runtime-grants.sql
+          } | docker exec -i "$POSTGRES_CONTAINER" psql -U terrapin -d terrapin_spring_test -v ON_ERROR_STOP=1
+      - name: Verify Spring Boot
+        working-directory: backend
+        run: ./mvnw --batch-mode --no-transfer-progress verify
