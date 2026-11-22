@@ -261,6 +261,49 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       assert.deepEqual(queue.filter(id => queueEventIds.includes(id)), expected)
     })
 
+    await t.test('event writes recheck persisted permissions and retain denial audit records', async t => {
+      const owner = await account(10, ['attendee', 'organizer'])
+      const reviewer = await account(11, ['attendee', 'administrator'])
+      const attendee = await account(12)
+      const date = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10)
+      const venue = (await events.venues()).rows.find(row => row.name === 'Iribe Center')
+      const details = {
+        title: 'Permission verification', description: 'Event permissions', category: 'Academic',
+        host: 'Sample organization', venue: String(venue.id), capacity: '1',
+        starts: date + 'T17:00', ends: date + 'T18:00', deadline: date + 'T16:00'
+      }
+      const id = await events.saveDraft(owner, null, form(details))
+      queueEventIds.push(id)
+      t.after(async () => {
+        await query('delete from notifications where event_id=$1', [id])
+        await query('delete from registrations where event_id=$1', [id])
+      })
+
+      await auth.updateAccount(administrator, owner.id, form({ active: 'on' }))
+      await assert.rejects(events.saveDraft(owner, id, form({ ...details, title: 'Changed title' })), /permission/)
+      assert.equal((await query('select title from events where id=$1', [id])).rows[0].title, details.title)
+      await auth.updateAccount(administrator, owner.id, form({ active: 'on', role: 'organizer' }))
+      await events.changeEvent(owner, id, 'submit', form({}))
+
+      await auth.updateAccount(administrator, reviewer.id, form({ active: 'on' }))
+      await assert.rejects(events.changeEvent(reviewer, id, 'approve', form({})), /permission/)
+      assert.equal((await query('select status from events where id=$1', [id])).rows[0].status, 'pending')
+      await auth.updateAccount(administrator, reviewer.id, form({ active: 'on', role: 'administrator' }))
+      await events.changeEvent(reviewer, id, 'approve', form({}))
+
+      await auth.updateAccount(administrator, attendee.id, form({}))
+      await assert.rejects(events.changeRegistration(attendee, id, false), /permission/)
+      assert.equal((await events.registration(attendee, id)).rowCount, 0)
+
+      const { rows } = await query(`select actor_id,action from audit_entries
+        where target=$1 and outcome='denied' order by id`, [String(id)])
+      assert.deepEqual(rows, [
+        { actor_id: owner.id, action: 'draft_save' },
+        { actor_id: reviewer.id, action: 'approve' },
+        { actor_id: attendee.id, action: 'registration_create' }
+      ])
+    })
+
     await t.test('FR-26–35, FR-37, FR-39–40 and FR-45 keep seats and inbox records consistent', async () => {
       assert.ok(eventId)
       const users = await Promise.all([3, 4, 5].map(number => account(number)))
