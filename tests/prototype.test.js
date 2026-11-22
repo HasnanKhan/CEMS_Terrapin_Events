@@ -178,7 +178,15 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
         host: 'Sample organization', venue: String(venue.id), capacity: '1',
         starts: date + 'T17:00', ends: date + 'T18:00', deadline: date + 'T16:00'
       }
-      await assert.rejects(events.saveDraft(organizer, null, form({ ...details, title: '' })), /Complete/)
+      for (const field of ['title', 'description', 'category', 'host']) {
+        await assert.rejects(events.saveDraft(organizer, null, form({ ...details, [field]: '' })), /Complete/)
+      }
+      for (const field of ['venue', 'capacity']) {
+        await assert.rejects(events.saveDraft(organizer, null, form({ ...details, [field]: '' })), /positive whole number/)
+      }
+      for (const field of ['starts', 'ends', 'deadline']) {
+        await assert.rejects(events.saveDraft(organizer, null, form({ ...details, [field]: '' })), /dates and times/)
+      }
       await assert.rejects(events.saveDraft(organizer, null, form({ ...details, starts: 'bad-date' })), /dates and times/)
       await assert.rejects(events.saveDraft(organizer, null, form({ ...details, capacity: '999' })), /selected venue/)
       await assert.rejects(events.saveDraft(organizer, null, form({ ...details, deadline: date + 'T18:30' })), /Eastern times/)
@@ -280,10 +288,20 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       assert.equal((await events.registration(waiting[1], eventId)).rows[0].status, 'confirmed')
       await assert.rejects(events.changeEvent(organizer, eventId, 'capacity', form({ capacity: '1' })), /cover all confirmed/)
       assert.equal((await events.getEvent(eventId, organizer)).capacity, 2)
-      const { rows } = await query('select kind,account_id from notifications where event_id=$1 order by id', [eventId])
-      assert.equal(rows.filter(row => row.kind === 'confirmed').length, 1)
-      assert.equal(rows.filter(row => row.kind === 'waitlisted').length, 2)
-      assert.deepEqual(rows.filter(row => row.kind === 'promoted').map(row => row.account_id), waiting.map(user => user.id))
+      const { rows } = await query(`select kind, account_id, message, created_at, delivered_at
+        from notifications where event_id=$1 order by id`, [eventId])
+      const title = 'Test event ' + marker
+      assert.deepEqual(rows.map(row => [row.kind, row.account_id, row.message]), [
+        ['confirmed', confirmed.id, `You’re registered for ${title}.`],
+        ...waiting.map((user, index) => ['waitlisted', user.id, `You joined the waitlist for ${title} at position ${index + 1}.`]),
+        ...waiting.map(user => ['promoted', user.id, `A seat opened for ${title}. You’re confirmed.`])
+      ])
+      for (const row of rows) {
+        assert.ok(row.created_at instanceof Date)
+        assert.ok(row.delivered_at instanceof Date)
+        const delayMs = row.delivered_at - row.created_at
+        assert.ok(delayMs >= 0 && delayMs < 5 * 60 * 1000)
+      }
       await events.changeRegistration(confirmed, eventId, false)
       assert.equal((await events.registration(confirmed, eventId)).rows[0].status, 'waitlisted')
       await events.changeRegistration(confirmed, eventId, true)

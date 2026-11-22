@@ -2,6 +2,17 @@
 
 This record covers the SRS prototype scope and the evidence needed for course submission. It tracks implementation separately from acceptance evidence so that a passing workflow cannot stand in for a requirement's full acceptance criteria.
 
+## Uploaded document conformance
+
+The audit uses the prototype boundary in SRS §1.2 and Table 3. Of 63 functional requirements, 29 are included, three are included with simulated delivery, four are included in part, and 27 are specified for the full system. All 36 prototype rows appear below. An SRS test case ID identifies the documented acceptance case. The evidence column identifies the check implemented in this repository.
+
+| Source | Finding |
+| --- | --- |
+| PA1 Project Management Plan §§1.4, 3.1, 4.3, and 5 | The repo supplies the limited prototype, setup instructions, tests, coverage, and PR reviews. The plan's earlier scope deferred approval. The later SRS and SADD include submission, the queue, and publishing. Team milestone sign-off, weekly progress tracking, and the final presentation require separate course records. WBS 5.3 still needs resolution of the design deviations below. |
+| PA2 Software Requirements Specification §§1.2, 3.1–3.4, and 6 | The three prototype workflows are implemented. The tables below record remaining acceptance evidence for individual requirements and misuse cases. |
+| PA3 Software Architecture Document §§3.2, 5, and 6 | The public catalog has a Spring implementation. The deployed application still uses its Next.js backend. The architecture decisions and their implementation differences are listed below. |
+| PA4 Software Architecture and Detailed Design Table 2 and §§3–5, 9–10 | The catalog has a controller, service, and repository in Java. The rest of the prototype still needs the specified Java interfaces, session and outbox design, and deployment. The supplied file contains authored design sections and later verification and implementation template prompts. The completed repository evidence belongs with the submission. |
+
 ## Test plan and evidence
 
 Run tests against an isolated local or CI PostgreSQL instance populated only with synthetic records. Use the commands in the [README](../README.md#prototype-verification). GitHub Actions saves the PostgreSQL, coverage, build, and Chromium results for each PR and push to main. Attach a passing run for the submitted commit to the course evidence package.
@@ -15,68 +26,81 @@ Run tests against an isolated local or CI PostgreSQL instance populated only wit
 
 Test links identify where the evidence lives. **Partial evidence** means the test covers a subset of the requirement's acceptance criteria. **Prototype subset** records an explicit scope limit in SRS Section 3.1.
 
-| SRS ID | Evidence | Status |
-| --- | --- | --- |
-| FR-1 | Browser signup with name, email, and password. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
-| FR-2 | Invalid domain and duplicate email are rejected with a reason. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-3 | Password-rule boundaries and signup rejection are tested. [Validation specs](../tests/input.test.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-4 | Incorrect login fails and correct login creates a readable session. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-5 | Five failed attempts set a 15-minute lock. An expired lock permits another attempt. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-6 | Sessions start with a 30-minute idle expiry and an additional 12-hour cap. Tests exercise sign-out, idle expiry, and the absolute cap. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-7 | New accounts receive only the Attendee role. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-8 | Grant and removal of Organizer access take effect in an active session. Deactivation invalidates the session, and reactivation is tested. [Browser access specs](../tests/browser/account-access.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for all role combinations |
-| FR-9 | Role denial, organizer ownership, and guest and attendee roster restrictions are exercised. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for every protected operation |
-| FR-11 | Organizer creates a draft with the required event fields. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
-| FR-12 | Missing title, invalid date, excessive venue capacity, and deadline after start are rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for all input boundaries |
-| FR-13 | Organizer saves and edits a draft before submission. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-14 | Six simultaneous submissions admit five and leave the sixth in draft. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-15 | Approval queue orders submissions oldest first and filters by organizer. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-16 | Administrator publishes a pending event and the event accepts registrations. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
-| FR-21 | Published event appears in the public list. [Chromium workflow](../tests/browser/mvp.spec.js) | Prototype subset, list view |
-| FR-24 | Event detail is rendered and registration behavior reflects remaining capacity. [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for every displayed field and count |
-| FR-25 | Draft is hidden from a guest and the published event appears in public search. [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for the visibility matrix. Completed and Cancelled lifecycle transitions are outside this prototype. |
-| FR-26 | An attendee confirms a seat for a published event before its deadline. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
-| FR-27 | Concurrent registration for one seat yields one confirmation and two waitlist entries. [PostgreSQL workflows](../tests/prototype.test.js) | Verified in the isolated concurrency case |
-| FR-28 | Duplicate confirmed and waitlist entries are rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-29 | Full event accepts a waitlist entry and stores each member’s join timestamp. [Chromium workflow](../tests/browser/mvp.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-30 | Waitlist positions are assigned and the next position updates after promotion. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-31 | Confirmed and waitlist cancellation work before the event. Browser coverage checks explicit confirmation, cancellation after registration closes, and the disabled action on past events. [Chromium workflow](../tests/browser/mvp.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-32 | Cancelling a confirmed seat promotes the first waitlisted attendee. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
-| FR-33 | Registration after the deadline and for draft and pending events is rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified for the prototype states |
-| FR-34 | Capacity increase promotes a waitlisted attendee. Changes exceeding venue capacity or falling below the confirmed count are rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-35 | Administrator can open a draft, pending, or published roster. Organizers are restricted to their own events. Guests and other users are denied. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Verified for authorization and roster contents used by the test |
-| FR-37 | My Events shows current status and waitlist position, groups past events, and explains the cancellation cutoff. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified for the browser scenarios |
-| FR-39 | Registration creates a confirmation entry. [PostgreSQL workflows](../tests/prototype.test.js) | Verified for simulated delivery |
-| FR-40 | Joining and promotion create inbox entries. The promotion is visible in Chromium. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for the exact join message contents |
-| FR-45 | Promotion appears in the recipient's inbox. The database records recipient, type, creation time, and delivery time. [Schema](../lib/schema.sql) · [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for timestamps and inbox isolation |
-| FR-46 | Catalog seeded with sample venues. [Schema](../lib/schema.sql) | Prototype subset, sample data |
-| FR-48 | Organizer selects a venue in the event form. [Chromium workflow](../tests/browser/mvp.spec.js) | Prototype subset, venue selection |
-| FR-52 | Draft capacity above the venue limit is rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
-| FR-62 | Audit tests check account and roster actions, allowed and denied outcomes, and trusted source IP attribution. [PostgreSQL workflows](../tests/prototype.test.js) | Prototype subset, partial evidence for the full audit matrix |
+| SRS ID | SRS test cases | Evidence | Status |
+| --- | --- | --- | --- |
+| FR-1 | TC-01 | Browser signup with name, email, and password. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
+| FR-2 | TC-02 | Invalid domain and duplicate email are rejected with a reason. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-3 | TC-03 | Password-rule boundaries and signup rejection are tested. [Validation specs](../tests/input.test.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-4 | TC-04 | Incorrect login fails and correct login creates a readable session. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-5 | TC-05 | Five failed attempts set a 15-minute lock. An expired lock permits another attempt. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-6 | TC-06 | Sessions start with a 30-minute idle expiry and an additional 12-hour cap. Tests exercise sign-out, idle expiry, and the absolute cap. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-7 | TC-01 | New accounts receive only the Attendee role. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-8 | TC-07 | Grant and removal of Organizer access take effect in an active session. Deactivation invalidates the session, and reactivation is tested. [Browser access specs](../tests/browser/account-access.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Partial evidence for all role combinations |
+| FR-9 | TC-08, TC-09, TC-70 | Role denial, organizer ownership, and guest and attendee roster restrictions are exercised. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for every protected operation |
+| FR-11 | TC-11 | Organizer creates a draft with the required event fields. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
+| FR-12 | TC-12 | Missing required fields, malformed dates, past starts, equal start and end times, zero or fractional capacity, and a deadline after start are rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified for the listed prototype validation rules |
+| FR-13 | TC-13 | Organizer saves and edits a draft before submission. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-14 | TC-14 | Six simultaneous submissions admit five and leave the sixth in draft. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-15 | TC-15 | Approval queue orders submissions oldest first and filters by organizer. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-16 | TC-16 | Administrator publishes a pending event and the event accepts registrations. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
+| FR-21 | TC-21 | Published event appears in the public list. [Chromium workflow](../tests/browser/mvp.spec.js) | Prototype subset, list view |
+| FR-24 | TC-24 | Event detail is rendered and registration behavior reflects remaining capacity. [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for every displayed field and count |
+| FR-25 | TC-25 | Draft is hidden from a guest and the published event appears in public search. [Chromium workflow](../tests/browser/mvp.spec.js) | Partial evidence for the visibility matrix. Completed and Cancelled lifecycle transitions are outside this prototype. |
+| FR-26 | TC-26 | An attendee confirms a seat for a published event before its deadline. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
+| FR-27 | TC-27 | Concurrent registration for one seat yields one confirmation and two waitlist entries. [PostgreSQL workflows](../tests/prototype.test.js) | Verified in the isolated concurrency case |
+| FR-28 | TC-28 | Duplicate confirmed and waitlist entries are rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-29 | TC-29 | Full event accepts a waitlist entry and stores each member’s join timestamp. [Chromium workflow](../tests/browser/mvp.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-30 | TC-29 | Waitlist positions are assigned and the next position updates after promotion. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-31 | TC-30 | Confirmed and waitlist cancellation work before the event. Browser coverage checks explicit confirmation, cancellation after registration closes, and the absence of the cancellation control on past events. [Chromium workflow](../tests/browser/mvp.spec.js) · [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-32 | TC-31, TC-33 | Cancelling a confirmed seat promotes the first waitlisted attendee. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Verified |
+| FR-33 | TC-32 | Registration after the deadline and for draft and pending events is rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified for the prototype states |
+| FR-34 | TC-33 | Capacity increase promotes a waitlisted attendee. Changes exceeding venue capacity or falling below the confirmed count are rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-35 | TC-34 | Administrator can open a draft, pending, or published roster. Organizers are restricted to their own events. Guests and other users are denied. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Verified for authorization and roster contents used by the test |
+| FR-37 | TC-36 | My Events shows current status and waitlist position, groups past events, and explains the cancellation cutoff. [Chromium workflow](../tests/browser/mvp.spec.js) | Verified for the browser scenarios |
+| FR-39 | TC-37 | Registration creates a confirmation entry. [PostgreSQL workflows](../tests/prototype.test.js) | Verified for simulated delivery |
+| FR-40 | TC-38 | Waitlist notices contain the assigned position, and promotion notices reach the promoted attendee. Both contents are checked in PostgreSQL and Chromium. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Verified for simulated delivery |
+| FR-45 | TC-42 | PostgreSQL checks message type, recipient, creation and delivery times. Chromium verifies that each attendee sees their own notice and that the other attendee's notice is absent. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Verified for the simulated inbox scenarios |
+| FR-46 | TC-43 | Catalog seeded with sample venues. [Schema](../lib/schema.sql) | Prototype subset, sample data |
+| FR-48 | TC-45 | Organizer selects a venue in the event form. [Chromium workflow](../tests/browser/mvp.spec.js) | Prototype subset, venue selection |
+| FR-52 | TC-49 | Draft capacity above the venue limit is rejected. [PostgreSQL workflows](../tests/prototype.test.js) | Verified |
+| FR-62 | TC-57 | Audit tests check account and roster actions, allowed and denied outcomes, and trusted source IP attribution. [PostgreSQL workflows](../tests/prototype.test.js) | Prototype subset, partial evidence for the full audit matrix |
 
 Rejection, resubmission, published event cancellation and completion, month and week calendars, resource management, check-in, reporting, and live notification delivery are full-system work. Keyword search is available in the deployed prototype as an enhancement.
 
 ## Nonfunctional requirements
 
-| SRS ID | Current evidence | Remaining acceptance check |
-| --- | --- | --- |
-| NFR-1–2 | Four 100-user runs met the SRS p95 thresholds for warmed server responses. The final build measured 223 ms for browse and 349 ms for registration or waitlisting, including its result page. [Controlled load verification](load-verification.md) | Measure hosted and browser-rendered latency in nonproduction. |
-| NFR-3 | An uncached database readiness endpoint is live. | Record availability over the acceptance period. |
-| NFR-6 | A synthetic Neon point-in-time recovery reached app readiness and passed browser verification in 6.251 seconds. All sampled records at the chosen point were recovered. [Recovery verification](recovery-verification.md) | Schedule and monitor daily backups and rehearse recovery at realistic volume with a deployment cutover. |
-| NFR-4–5 | Each of four 100-user bursts produced 20 confirmed, 80 waitlisted, and three FIFO promotions, with zero overbookings or missing or duplicate registrations. [Controlled load verification](load-verification.md) | Repeat on hosted nonproduction infrastructure before using these measurements to assess deployment capacity. |
-| NFR-7 | Simulated notices are written in the registration transaction. | Record timing from trigger to inbox visibility and verify the required 99% within five minutes. |
-| NFR-8 | Changes and cancellations with live delivery and retries are full-system scope. | Validate with the notification pipeline if those features are added. |
-| NFR-9 | New hashes use Argon2id. The production demo audit confirmed zero legacy hashes after upgrading the bootstrap account. [Password tests](../tests/password.test.js) | Review password handling if the identity model changes. |
-| NFR-10 | Production redirected HTTP with status 308 and returned HTTP 200 over a connection constrained to TLS 1.2. HSTS was present in the header audit. | Confirm the minimum allowed protocol in the deployment policy and retain the evidence. |
-| NFR-11 | Vercel Production uses the restricted PostgreSQL runtime login. A 366-day-old synthetic audit entry and append-only runtime grants survived both restore rehearsals. [Recovery verification](recovery-verification.md) | Verify coverage of all access denials and an operating one-year retention and restore procedure. |
-| NFR-12 | Dependency audit, browser isolation headers, role and input checks, and a passive ZAP sample of five public responses with zero high and four medium alerts. [Security verification](recovery-verification.md#passive-web-security-evidence) | Review the content security policy findings and complete authenticated and defensive input and cross-origin verification. |
-| NFR-13 | Server actions delegate to authentication, event, and database modules. The regression suite covers the main workflows. | Record QA-07 change-isolation evidence and complete the design-to-code mapping for submission. |
-| NFR-14 | The browser suite exercises the registration path and status changes. | Run the participant protocol below. At least 90% must find and register for the event within two minutes. |
-| NFR-15 | Chromium checks a 360 px event page, keyboard skip navigation, and focus after server-side errors and cancellation. The [workflow spec](../tests/browser/mvp.spec.js) checks horizontal keyboard scrolling of a populated roster. [Automated accessibility specs](../tests/browser/accessibility.spec.js) scan public pages at mobile and desktop widths. | Verify all screens manually with keyboard and assistive technology, review contrast, and record WCAG 2.1 AA results. |
-| NFR-16 | Vercel executes the stateless app. Sessions and request limits use PostgreSQL. | Measure scaling to 500 concurrent users if this optional target is pursued. |
-| NFR-17 | Roster access tests cover owning organizers and administrators, with guest and attendee denial. | Complete the field-level access matrix and approve data handling for any real-user pilot. |
-| NFR-18 | Tests verify the 20-login and 10-registration limits, concurrency, and rolling-window expiry. [Rate-limit tests](../tests/rate-limit.test.js) | Keep the trusted client IP regression in CI. |
-| NFR-19 | CI enforces 80% statement coverage per backend file. This matrix identifies test links and remaining checks. | Finish the partial and open Must checks and attach the passing coverage and test reports for the submitted commit. |
+| SRS ID | SRS test cases | Current evidence | Remaining acceptance check |
+| --- | --- | --- | --- |
+| NFR-1–2 | TC-59, TC-60 | Four 100-user runs met the SRS p95 thresholds for warmed server HTTP responses. [Controlled load verification](load-verification.md) | Run the SAD's sustained 10-minute browse workload and separate registration workload on its two-instance test deployment. Measure browser-rendered page latency and retain raw results. |
+| NFR-3 | TC-61 | An uncached database readiness endpoint is live. Spring has separate liveness and readiness checks. | Record availability over the acceptance period, the maintenance window and advance notice, and recovery from an application instance failure within 15 minutes with no lost confirmations. |
+| NFR-6 | TC-62 | A synthetic Neon point-in-time recovery reached app readiness and passed browser verification in 6.251 seconds. All sampled records at the chosen point were recovered. [Recovery verification](recovery-verification.md) | Schedule and monitor daily backups and rehearse recovery at realistic volume with a deployment cutover. |
+| NFR-4–5 | TC-27, TC-31 | Each of four 100-user bursts produced 20 confirmed, 80 waitlisted, and three FIFO promotions, with zero overbookings or missing or duplicate registrations. [Controlled load verification](load-verification.md) | Repeat on hosted nonproduction infrastructure before using these measurements to assess deployment capacity. |
+| NFR-7 | TC-37, TC-38 | Simulated notices are written in the registration transaction. The database test checks that the difference between the recorded creation and delivery times is under five minutes in the fixture. Chromium checks inbox visibility after the action. [PostgreSQL workflows](../tests/prototype.test.js) · [Chromium workflow](../tests/browser/mvp.spec.js) | Measure trigger-to-inbox time across a representative sample and verify 99% delivery within five minutes. |
+| NFR-8 | TC-40 | Change and cancellation notices correspond to FR-42 and FR-43, which Table 3 places beyond the prototype. The SADD still specifies a retrying outbox for simulated prototype messages. | The full-system check requires 99% delivery within 15 minutes and at least three retries. Verify the simulated outbox separately when it is implemented. |
+| NFR-9 | TC-63 | New hashes use Argon2id. The production demo audit confirmed zero legacy hashes after upgrading the bootstrap account. [Password tests](../tests/password.test.js) | Review password handling if the identity model changes. |
+| NFR-10 | TC-64 | Production redirected HTTP with status 308 and returned HTTP 200 over a connection constrained to TLS 1.2. HSTS was present in the header audit. | Confirm the minimum allowed protocol in the deployment policy and retain the evidence. |
+| NFR-11 | TC-08, TC-09, TC-57 | Vercel Production uses the restricted PostgreSQL runtime login. A 366-day-old synthetic audit entry and append-only runtime grants survived both restore rehearsals. [Recovery verification](recovery-verification.md) | Verify coverage of all access denials and an operating one-year retention and restore procedure. |
+| NFR-12 | TC-65 | Dependency audit, browser isolation headers, role and input checks, and a passive ZAP sample of five public responses with zero high and four medium alerts. [Security verification](recovery-verification.md#passive-web-security-evidence) | Review the content security policy findings and complete authenticated and defensive input and cross-origin verification. |
+| NFR-13 | TC-66 | Server actions delegate to authentication, event, and database modules. The regression suite covers the main workflows. | Record QA-07 change-isolation evidence and complete the design-to-code mapping for submission. |
+| NFR-14 | TC-67 | The browser suite exercises the registration path and status changes. | Run the participant protocol below. At least 90% must find and register for the event within two minutes. |
+| NFR-15 | TC-68 | Chromium checks a 360 px event page, keyboard skip navigation, and focus after server-side errors and cancellation. The [workflow spec](../tests/browser/mvp.spec.js) checks horizontal keyboard scrolling of a populated roster. [Automated accessibility specs](../tests/browser/accessibility.spec.js) scan public pages at mobile and desktop widths. | Verify all screens manually with keyboard and assistive technology, review contrast, and record WCAG 2.1 AA results. |
+| NFR-16 | TC-69 | Vercel executes the stateless app. Sessions and request limits use PostgreSQL. | Measure scaling to 500 concurrent users if this optional target is pursued. |
+| NFR-17 | TC-70 | Roster access tests cover owning organizers and administrators, with guest and attendee denial. | Complete the field-level access matrix and approve data handling for any real-user pilot. |
+| NFR-18 | TC-71 | Tests verify the 20-login and 10-registration limits, concurrency, and rolling-window expiry. [Rate-limit tests](../tests/rate-limit.test.js) | Keep the trusted client IP regression in CI. |
+| NFR-19 | TC-72 | Node CI enforces 80% statement coverage per backend file across unit and PostgreSQL integration tests. Spring CI runs JUnit integration tests and shared-database Chromium workflows. This matrix links requirements to test cases and implementation evidence. | Measure unit-test statement coverage separately, add Java coverage reporting and a gate, and attach the results for the submitted commit. Finish open Must checks within the scoped prototype. |
+
+## Security and misuse cases
+
+| SRS case | Verified behavior and remaining evidence |
+| --- | --- |
+| AC-1 · TC-09 | Role checks block unauthorized actions and record sampled denials. Complete the full endpoint and role matrix. |
+| AC-2 · TC-05, TC-63, TC-71 | Lockout, adaptive password hashing, failure logging, and login limits have regression tests. Preserve these when migrating authentication. |
+| AC-3 · TC-70 | Owning organizers and administrators can see allowed roster data. Guests, attendees, and non-owning organizers are denied in tested cases. Reporting is full-system scope. |
+| AC-4 · TC-02, TC-28, TC-60, TC-71 | Duplicate emails and registrations are rejected, and test users are rate limited. Sustained load evidence remains open. |
+| AC-5 · TC-65 | Server validation, parameterized PostgreSQL queries, framework request controls, and a passive scan cover parts of the case. The full defensive form verification set remains open. |
+| AC-6 · TC-27, TC-31 | Registration tests and the controlled load harness verify capacity, uniqueness, and FIFO promotions on the current implementation. |
+| AC-7 · TC-58 | The runtime role is append-only for audit entries. The full-system audit viewer is deferred, and denial coverage and one-year retention evidence remain open. |
+| AC-8 · TC-14, TC-50 | Concurrent submissions enforce the five-pending-event limit, and the queue filters by organizer. Booking release for rejected and cancelled events is full-system scope. |
 
 ## Participant usability and manual accessibility
 
@@ -86,13 +110,16 @@ For manual accessibility, use a keyboard at 360 px and desktop widths and repeat
 
 ## Architecture conformance
 
-| SAD and SADD component | Implemented component | Status |
+| SAD decision and SADD design | Implemented component | Conformance |
 | --- | --- | --- |
-| React presentation | [Next.js page and components](../app/page.js) | React retained |
-| Spring API and service layer | [Spring Boot public catalog API](../backend/README.md#public-event-api) · [Next.js Server Actions](../app/actions.js) | Explore can read its event list and venue filters from Spring in [staging](../backend/README.md#stage-the-event-directory). Production still uses Next.js. |
-| PostgreSQL persistence and sessions | [Schema](../lib/schema.sql) · [Connection pool](../lib/db.js) | PostgreSQL retained on Neon |
-| Notification outbox, worker, retries | Registration transaction writes simulated inbox records. [Event service](../lib/events.js) | Delivery design deviation to record |
-| Nginx and Docker Compose deployment | Vercel and Neon. [Deployment instructions](../README.md#deploy-to-vercel-and-neon) | Deployment deviation to record |
+| D1–D2 · Java 21 Spring Boot modular monolith with controller, service, and repository layers | The Java public catalog follows that layering. [Spring catalog](../backend/src/main/java/edu/umd/cems/catalog) · [Next.js Server Actions](../app/actions.js) | Partial. Staging Explore can read from Spring. Production and the protected operations still use Next.js. |
+| D3 · PostgreSQL 16 and Spring Data JPA | PostgreSQL on Neon, PostgreSQL 16 in CI, and a Spring Data catalog repository with access through restricted views. [Schema](../lib/schema.sql) · [Catalog repository](../backend/src/main/java/edu/umd/cems/catalog/CatalogRepository.java) | Partial. The current app still uses direct SQL for transactions, role and session persistence, and most reads. The deployed schema differs from the SADD entity model. |
+| D4 · Dedicated seat-record lock and active-registration uniqueness | Node locks the event row and uses a unique event and account pair. Cancelling deletes the active registration. [Registration logic](../lib/events.js) · [Schema](../lib/schema.sql) | The tested capacity and FIFO behavior is present. The SADD specifies a seat row, a 1.5-second lock timeout, and retained cancelled rows. During migration both runtimes need a common lock until one owns all registration writes. |
+| D5 · Transactional outbox, worker, and retries | The registration transaction inserts the resulting simulated inbox record. [Registration logic](../lib/events.js) | Open. Separate pending and delivered states, a polling worker, and retry behavior are required by the design. |
+| D6 · Spring Security and shared Spring Session JDBC | The production app stores hashed session tokens and rate-limit counters in PostgreSQL. Spring Security protects the catalog routes. [Node authentication](../lib/auth.js) · [Spring security](../backend/src/main/java/edu/umd/cems/security/SecurityConfig.java) | Partial. Spring identity, protected operations, shared Spring Session JDBC, and centralized denial auditing are still open. The SRS allows Argon2id. The design names bcrypt, so account migration needs an explicit hashing decision and a compatibility test for existing accounts. |
+| D7 · React 18 SPA over documented REST/JSON contracts | React in Next.js renders server pages. The Spring catalog implements the public event GET routes and a venue endpoint. [Frontend](../app/page.js) · [Spring API](../backend/README.md#public-event-api) | Partial. SRS Table 8's protected REST routes and JSON error code and message contract are incomplete. The SPA and server-rendering difference needs a design decision. |
+| D8 · Simulated notification and local identity adapters | Local accounts and a simulated in-app inbox meet the chosen prototype behavior. [Authentication](../lib/auth.js) · [Inbox](../app/page.js) | The design's injected identity and notification adapters are still open. |
+| SAD §3.2.4 · Nginx HTTPS and Docker Compose with two Spring instances and PostgreSQL | Vercel serves the prototype over HTTPS with Neon. [Deployment instructions](../README.md#deploy-to-vercel-and-neon) | Deployment deviation. The specified topology and its application-instance failover test remain open. |
 
 ## Defect and follow-up log
 
