@@ -1,7 +1,7 @@
 import Link from 'next/link'
-import { audit, currentUser, extraRoles, selfSignupEnabled } from '../lib/auth.js'
+import { accountDirectory, audit, currentUser, extraRoles, selfSignupEnabled } from '../lib/auth.js'
 import { query } from '../lib/db.js'
-import { approvalQueue, categories, eventsPerPage, getEvent, organizerEvents, publicEvents, registration, registrations, roster, rosterEvents, venues } from '../lib/events.js'
+import { approvalOwners, approvalQueue, categories, eventsPerPage, getEvent, organizerEvents, publicEvents, registration, registrations, roster, rosterEvents, venues } from '../lib/events.js'
 import { optionalId } from '../lib/input.js'
 import { springDirectory, SpringCatalogUnavailable } from '../lib/spring-catalog.js'
 import { actionFeedback } from './feedback.js'
@@ -295,9 +295,8 @@ function EventList({ rows, empty, queue = false }) {
   </li>)}</ul> : <Empty title={empty} />
 }
 
-async function Queue({ owner }) {
-  const [list, owners] = await Promise.all([approvalQueue(owner), query(`select distinct a.id,a.name,a.email from accounts a
-    join events e on e.owner_id=a.id where e.status='pending' order by a.name,a.email`)])
+async function Queue({ user, owner }) {
+  const [list, owners] = await Promise.all([approvalQueue(user, owner), approvalOwners(user)])
   return <><PageHeading title="Approval queue" description="Review submissions in the order they were received.">
       <Link className="button quiet" href={rosterPath()}>Event rosters</Link>
     </PageHeading>
@@ -367,8 +366,8 @@ async function Inbox({ user }) {
     </div></li>)}</ul> : <Empty title="You’re all caught up" />}</>
 }
 
-async function Accounts() {
-  const { rows } = await query('select id,name,email,roles,active from accounts order by name,email')
+async function Accounts({ user }) {
+  const { rows } = await accountDirectory(user)
   return <><PageHeading title="Accounts" description="Manage access and account status for course demo users." />
     <div className="account-grid">{rows.map(account => <section className="panel" key={account.id}>
       <h2>{account.name}</h2><p>{account.email}</p>
@@ -399,9 +398,9 @@ export default async function Page({ searchParams }) {
   else if (view === 'my') content = <MyEvents user={user} />
   else if (view === 'inbox') content = <Inbox user={user} />
   else if (view === 'organize') content = <Organizer user={user} create={params.create === '1'} />
-  else if (view === 'queue') content = <Queue owner={optionalId(params.owner)} />
+  else if (view === 'queue') content = <Queue user={user} owner={optionalId(params.owner)} />
   else if (view === 'rosters') content = <Rosters user={user} id={id} page={optionalId(params.page) ?? 1} />
-  else if (view === 'accounts') content = <Accounts />
+  else if (view === 'accounts') content = <Accounts user={user} />
   else content = <Explore params={params} />
   return <>
     <a className="skip" href="#main">Skip to content</a>
