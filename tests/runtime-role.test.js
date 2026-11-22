@@ -2,13 +2,12 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 import pg from 'pg'
+import { testDatabase } from './support/database.js'
 
 test('the app role can append audit records but cannot inspect or change them', {
   skip: !process.env.TEST_DATABASE_URL
 }, async () => {
-  const url = new URL(process.env.TEST_DATABASE_URL)
-  assert.ok(['postgres:', 'postgresql:'].includes(url.protocol))
-  assert.ok(['localhost', '127.0.0.1', '[::1]'].includes(url.hostname), 'Use isolated local PostgreSQL.')
+  const url = testDatabase()
   const client = new pg.Client({ connectionString: url.href })
   await client.connect()
   try {

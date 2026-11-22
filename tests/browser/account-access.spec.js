@@ -2,16 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import pg from 'pg'
 import { hashPassword } from '../../lib/password.js'
+import { testDatabase } from '../support/database.js'
 import { signIn } from './sign-in.js'
 
 test.describe('access changes for a signed-in attendee', () => {
   test('role grants and removals apply to the current session, and deactivation revokes it', async ({ browser, page, baseURL }) => {
-    const url = new URL(process.env.TEST_DATABASE_URL)
-    if (!['postgres:', 'postgresql:'].includes(url.protocol) ||
-        !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
-      throw new Error('Use an isolated localhost PostgreSQL database for browser fixtures.')
-    }
-    const fixtures = new pg.Pool({ connectionString: url.href })
+    const fixtures = new pg.Pool({ connectionString: testDatabase().href })
     const attendee = await browser.newContext({ baseURL })
     const email = `browser-access-${randomUUID()}@umd.edu`
     const password = 'BrowserPermissionTest1'

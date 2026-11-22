@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { test } from 'node:test'
 import { database, query } from '../lib/db.js'
 import { clientIp } from '../lib/rate-limit.js'
+import { testDatabase } from './support/database.js'
 
 test('NFR-18 uses only a valid, Vercel-supplied client IP', () => {
   const requestHeaders = new Headers({ 'x-forwarded-for': '203.0.113.42' })
@@ -15,8 +16,7 @@ test('NFR-18 uses only a valid, Vercel-supplied client IP', () => {
 test('NFR-18 enforces rolling limits across concurrent requests', {
   skip: !process.env.TEST_DATABASE_URL
 }, async t => {
-  const url = new URL(process.env.TEST_DATABASE_URL)
-  assert.ok(['localhost', '127.0.0.1', '[::1]'].includes(url.hostname), 'Use an isolated local PostgreSQL database.')
+  const url = testDatabase()
   process.env.DATABASE_URL = url.href
   const subject = randomUUID()
   t.after(async () => {

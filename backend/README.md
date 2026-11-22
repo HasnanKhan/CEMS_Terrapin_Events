@@ -32,4 +32,4 @@ Monitor Spring's readiness probe separately in staging. The Next.js `/api/health
 
 Apply the [catalog test fixtures](src/test/resources/catalog-fixtures.sql) as the owner of a fresh disposable local PostgreSQL database with the schema and grants above. Run `./mvnw verify` from `backend` with that database's catalog login. GitHub Actions runs the same checks on an isolated PostgreSQL 16 service. Spring and Hibernate schema initialization remain disabled.
 
-The Spring CI workflow also runs Chromium against both services. Its Next.js database omits the Spring-only fixtures, which verifies that results come from Spring. It repeats the browser check with Spring stopped to verify the outage message.
+The Spring CI workflow runs Chromium against both services. The first test uses a separate Next.js database to verify that Explore gets its results from Spring. The workflow then runs the event and registration journeys with both services sharing one disposable database, followed by an outage check with Spring stopped. Failed browser runs retain traces and the Spring process log for seven days. Node and browser fixtures require plain loopback database URLs.

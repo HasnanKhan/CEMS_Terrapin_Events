@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import pg from 'pg'
+import { testDatabase } from '../support/database.js'
 
 const outage = process.env.TEST_SPRING_CATALOG_OUTAGE === '1'
 test.skip(!process.env.TEST_SPRING_CATALOG_URL, 'Requires an isolated Spring catalog fixture')
@@ -7,7 +8,7 @@ test.use({ viewport: { width: 360, height: 800 }, javaScriptEnabled: false })
 
 test('filters and pages through results served by the Spring catalog', async ({ page }) => {
   test.skip(outage, 'Spring is stopped for the outage check')
-  const db = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL })
+  const db = new pg.Client({ connectionString: testDatabase().href })
   await db.connect()
   try {
     const { rows: [result] } = await db.query("select exists(select 1 from events where title = 'Spring fair %_ 13') as present")

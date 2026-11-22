@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import pg from 'pg'
+import { testDatabase } from '../support/database.js'
 import { signIn } from './sign-in.js'
 
 const password = 'BrowserAttendeeTest1'
@@ -119,7 +120,7 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
       await second.getByRole('button', { name: 'Join waitlist' }).click()
       await expect(second.getByRole('status')).toHaveText('You joined the waitlist at position 1.')
 
-      const fixture = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL })
+      const fixture = new pg.Client({ connectionString: testDatabase().href })
       await fixture.connect()
       try {
         await fixture.query("update events set deadline=now()-interval '1 second' where id=$1", [event.searchParams.get('event')])

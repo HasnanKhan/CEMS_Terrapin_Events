@@ -1,12 +1,8 @@
 import { defineConfig } from '@playwright/test'
+import { testDatabase } from './tests/support/database.js'
 
-const database = new URL(process.env.TEST_DATABASE_URL ?? 'file:///')
-if (!['postgres:', 'postgresql:'].includes(database.protocol) ||
-    !['localhost', '127.0.0.1', '[::1]'].includes(database.hostname)) {
-  throw new Error('Set TEST_DATABASE_URL to an isolated PostgreSQL database on localhost.')
-}
-
-const runtimeDatabase = new URL(process.env.TEST_RUNTIME_DATABASE_URL ?? database.href)
+const database = testDatabase()
+const runtimeDatabase = testDatabase(process.env.TEST_RUNTIME_DATABASE_URL ?? database.href, 'TEST_RUNTIME_DATABASE_URL')
 if (runtimeDatabase.protocol !== database.protocol ||
     runtimeDatabase.host !== database.host || runtimeDatabase.pathname !== database.pathname) {
   throw new Error('TEST_RUNTIME_DATABASE_URL must target the same isolated test database.')
