@@ -71,7 +71,7 @@ The [Java 21 and Spring Boot setup](backend/README.md) runs a separate read-only
 | `npm run test:browser` | Chromium workflows and axe checks on public pages at phone and desktop widths. |
 | `./mvnw verify` from `backend` | Spring and PostgreSQL integration tests using the [Spring test fixtures](backend/README.md#verify). |
 
-For the full Node and browser suites, point `TEST_DATABASE_URL` at a disposable local PostgreSQL database. Use a plain URL for this isolated fixture database. To exercise the restricted Next.js role, also set `TEST_RUNTIME_DATABASE_URL` to its connection for the same database.
+For the full Node and browser suites, install the PostgreSQL command-line client (`psql`) and set `TEST_DATABASE_URL` to a plain URL for a disposable local database. To exercise the restricted Next.js role, also set `TEST_RUNTIME_DATABASE_URL` to its connection for the same database.
 
 ```sh
 psql "${TEST_DATABASE_URL:?Set a disposable local fixture database URL}" -v ON_ERROR_STOP=1 -f lib/schema.sql
@@ -101,7 +101,7 @@ The Next.js `terrapin_runtime` login can append audit records. Audit reads and m
 ## Operations and release readiness
 
 - **Sessions.** Session tokens are stored as hashes. A session expires after 30 minutes idle or 12 hours since sign-in. Apply schema updates before deploying.
-- **Request limits.** Each client IP gets five signup attempts and 20 sign-in attempts in a rolling minute. Each account gets 10 registration or cancellation attempts in that window. Set `SELF_SIGNUP_ENABLED=false` and redeploy to pause public signup.
+- **Request limits.** Limits per rolling minute are five signup attempts and 20 sign-in attempts per trusted Vercel client IP, plus 10 registration or cancellation attempts per account. Requests without a trusted IP share a fallback bucket. Set `SELF_SIGNUP_ENABLED=false` and redeploy to pause public signup.
 - **Registration integrity.** Registration, cancellation, and capacity changes use the same PostgreSQL event lock. Seat changes, waitlist promotions, and inbox records commit together.
 - **Audit and recovery.** Retain audit history for at least a year and monitor daily backups. Record restore time and data loss from an isolated restore drill.
 - **Readiness.** Next.js `GET /api/health` returns HTTP 200 when it can reach PostgreSQL and HTTP 503 when it cannot. Staging Spring readiness is checked separately. Set a monitoring interval that fits the database compute budget.
