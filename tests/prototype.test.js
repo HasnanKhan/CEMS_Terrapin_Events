@@ -356,5 +356,32 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       await assert.rejects(events.changeRegistration(waiting[0], eventId, true), /already started/)
       assert.equal((await events.registration(waiting[0], eventId)).rows[0].status, 'confirmed')
     })
+
+    await t.test('private event and roster reads use current account permissions', async () => {
+      const reviewer = await account(13, ['attendee', 'administrator'])
+      const date = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10)
+      const venue = (await events.venues()).rows.find(row => row.name === 'Iribe Center')
+      const draft = await events.saveDraft(organizer, null, form({
+        title: 'Private event', description: 'Read permissions', category: 'Academic',
+        host: 'Sample organization', venue: String(venue.id), capacity: '1',
+        starts: date + 'T17:00', ends: date + 'T18:00', deadline: date + 'T16:00'
+      }))
+      queueEventIds.push(draft)
+      assert.equal((await events.getEvent(draft, organizer)).status, 'draft')
+      assert.deepEqual((await events.roster(draft, organizer)).rows, [])
+      await events.changeEvent(organizer, draft, 'submit', form({}))
+      assert.equal((await events.getEvent(draft, reviewer)).status, 'pending')
+      assert.equal((await events.roster(eventId, reviewer)).rows.length, 2)
+
+      await auth.updateAccount(administrator, reviewer.id, form({ active: 'on' }))
+      assert.equal(await events.getEvent(draft, reviewer), null)
+      assert.equal(await events.roster(eventId, reviewer), null)
+      assert.equal((await events.rosterEvents(reviewer, 1)).rowCount, 0)
+      assert.equal((await events.getEvent(eventId, reviewer)).status, 'published')
+
+      await auth.updateAccount(administrator, organizer.id, form({ role: 'organizer' }))
+      assert.equal(await events.getEvent(draft, organizer), null)
+      assert.equal(await events.roster(draft, organizer), null)
+    })
   })
 })
