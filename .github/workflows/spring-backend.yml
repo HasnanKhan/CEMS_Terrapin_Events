@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   backend:
     name: Java 21 and PostgreSQL
@@ -79,8 +83,21 @@ jobs:
           spring_pid=$!
           trap 'if [ -n "$spring_pid" ]; then kill "$spring_pid" 2>/dev/null || true; fi' EXIT
           curl --fail --silent --show-error --retry-all-errors --retry 15 --retry-delay 1 --max-time 3 "$TEST_SPRING_CATALOG_URL/actuator/health/readiness"
-          npm run test:browser -- spring-catalog.spec.js
+          npm run test:browser -- spring-catalog.spec.js --output=test-results/spring-directory
+          docker exec -i "$POSTGRES_CONTAINER" psql -U terrapin -d terrapin_spring_test -v ON_ERROR_STOP=1 < lib/runtime-grants.sql
+          TEST_DATABASE_URL=postgresql://terrapin:terrapin_test@127.0.0.1:5432/terrapin_spring_test \
+            TEST_RUNTIME_DATABASE_URL=postgresql://terrapin_runtime:terrapin_runtime_test@127.0.0.1:5432/terrapin_spring_test \
+            npm run test:browser -- mvp.spec.js event-directory.spec.js --output=test-results/spring-shared-database
           kill "$spring_pid"
           wait "$spring_pid" || true
           spring_pid=''
-          TEST_SPRING_CATALOG_OUTAGE=1 npm run test:browser -- spring-catalog.spec.js
+          TEST_SPRING_CATALOG_OUTAGE=1 npm run test:browser -- spring-catalog.spec.js --output=test-results/spring-outage
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: spring-directory-failure
+          path: |
+            test-results/
+            ${{ runner.temp }}/cems-spring.log
+          if-no-files-found: ignore
+          retention-days: 7

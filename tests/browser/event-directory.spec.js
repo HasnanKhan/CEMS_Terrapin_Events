@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import pg from 'pg'
+import { testDatabase } from '../support/database.js'
 
 test.use({ viewport: { width: 360, height: 800 }, javaScriptEnabled: false })
 
 test('mobile search keeps filters through pagination, event details, and empty results', async ({ page }) => {
   const marker = 'Directory ' + randomUUID()
-  const db = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL })
+  const db = new pg.Client({ connectionString: testDatabase().href })
   await db.connect()
   try {
     const { rows: [venue] } = await db.query("select id from venues where name='Iribe Center'")

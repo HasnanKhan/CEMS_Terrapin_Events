@@ -4,13 +4,13 @@ import { register, syncBuiltinESMExports } from 'node:module'
 import { test } from 'node:test'
 import { database, query } from '../lib/db.js'
 import { hashPassword, tokenHash } from '../lib/password.js'
+import { testDatabase } from './support/database.js'
 import { cookies, runRequest } from './support/request.js'
 
 register('./support/resolve.js', import.meta.url)
 
 test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_URL }, async t => {
-  const url = new URL(process.env.TEST_DATABASE_URL)
-  assert.ok(['localhost', '127.0.0.1', '[::1]'].includes(url.hostname), 'Use an isolated local PostgreSQL database.')
+  const url = testDatabase()
   process.env.DATABASE_URL = url.href
   process.env.VERCEL = '1'
   process.env.SELF_SIGNUP_ENABLED = 'true'
