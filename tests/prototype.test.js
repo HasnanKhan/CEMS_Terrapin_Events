@@ -213,7 +213,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       await events.saveDraft(organizer, eventId, form({ ...details, description: 'Updated description' }))
       await assert.rejects(events.changeEvent(organizer, eventId, 'approve', form({})), /permission/)
       await events.changeEvent(organizer, eventId, 'submit', form({}))
-      assert.ok((await events.approvalQueue(organizer.id)).rows.some(row => row.id === eventId))
+      assert.ok((await events.approvalQueue(administrator, organizer.id)).rows.some(row => row.id === eventId))
       assert.equal((await events.getEvent(eventId, administrator)).status, 'pending')
       assert.equal((await events.roster(eventId, administrator)).event.status, 'pending')
       await assert.rejects(events.changeRegistration(organizer, eventId, false), /Registration is closed/)
@@ -255,9 +255,9 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       await query(`update events e
         set submitted_at=now() - interval '1 hour' + item.position * interval '1 second'
         from unnest($1::int[]) with ordinality item(id,position) where e.id=item.id`, [expected])
-      const filtered = (await events.approvalQueue(ownerA.id)).rows.map(event => event.id)
+      const filtered = (await events.approvalQueue(administrator, ownerA.id)).rows.map(event => event.id)
       assert.deepEqual(filtered, expected.filter(id => id !== other))
-      const queue = (await events.approvalQueue(null)).rows.map(event => event.id)
+      const queue = (await events.approvalQueue(administrator, null)).rows.map(event => event.id)
       assert.deepEqual(queue.filter(id => queueEventIds.includes(id)), expected)
     })
 
@@ -382,6 +382,24 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       await auth.updateAccount(administrator, organizer.id, form({ role: 'organizer' }))
       assert.equal(await events.getEvent(draft, organizer), null)
       assert.equal(await events.roster(draft, organizer), null)
+    })
+
+    await t.test('privileged workspaces stop returning records after access is revoked', async () => {
+      const reviewer = await account(14, ['attendee', 'administrator'])
+      const coordinator = await account(15, ['attendee', 'system_admin'])
+      await auth.updateAccount(administrator, organizer.id, form({ active: 'on', role: 'organizer' }))
+      assert.ok((await events.organizerEvents(organizer)).rows.some(row => row.id === eventId))
+      assert.ok((await events.approvalQueue(reviewer, organizer.id)).rows.some(row => row.owner_id === organizer.id))
+      assert.ok((await events.approvalOwners(reviewer)).rows.some(row => row.id === organizer.id))
+      assert.ok((await auth.accountDirectory(coordinator)).rows.some(row => row.id === reviewer.id))
+
+      await auth.updateAccount(administrator, reviewer.id, form({ active: 'on' }))
+      await auth.updateAccount(administrator, coordinator.id, form({ active: 'on' }))
+      await auth.updateAccount(administrator, organizer.id, form({ active: 'on' }))
+      assert.equal((await events.approvalQueue(reviewer, null)).rowCount, 0)
+      assert.equal((await events.approvalOwners(reviewer)).rowCount, 0)
+      assert.equal((await auth.accountDirectory(coordinator)).rowCount, 0)
+      assert.equal((await events.organizerEvents(organizer)).rowCount, 0)
     })
   })
 })
