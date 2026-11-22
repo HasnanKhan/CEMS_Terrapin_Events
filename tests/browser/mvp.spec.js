@@ -101,6 +101,14 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
       await signUpForEvent(second, event.href, `browser-second-${id}@umd.edu`)
       await second.getByRole('button', { name: 'Join waitlist' }).click()
       await expect(second.getByRole('status')).toHaveText('You joined the waitlist at position 1.')
+      const confirmation = `You’re registered for ${title}.`
+      const joinedWaitlist = `You joined the waitlist for ${title} at position 1.`
+      await first.getByRole('link', { name: 'Inbox', exact: true }).click()
+      await expect(first.getByRole('link', { name: confirmation, exact: true })).toBeVisible()
+      await expect(first.getByRole('link', { name: joinedWaitlist, exact: true })).toHaveCount(0)
+      await second.getByRole('link', { name: 'Inbox', exact: true }).click()
+      await expect(second.getByRole('link', { name: joinedWaitlist, exact: true })).toBeVisible()
+      await expect(second.getByRole('link', { name: confirmation, exact: true })).toHaveCount(0)
 
       const myEvents = new URL('/?view=my', event).href
       await second.goto(myEvents)
