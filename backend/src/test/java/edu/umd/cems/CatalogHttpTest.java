@@ -73,6 +73,8 @@ class CatalogHttpTest {
         assertThat(http.getForEntity("/api/events/export", String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(http.getForEntity("/api/events/820001/roster", String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(http.postForEntity("/api/events", null, String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(http.postForEntity("/internal/session/resolve", null, String.class).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
