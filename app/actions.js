@@ -22,7 +22,7 @@ export async function submit(action, target, destination, previous, form) {
       await signOut()
       path = '/'
     } else {
-      const user = await currentUser()
+      const user = await currentUser({ forWrite: true })
       switch (action) {
         case 'save': {
           const id = await saveDraft(user, target, form)

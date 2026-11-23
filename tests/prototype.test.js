@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert'
 import crypto, { randomBytes } from 'node:crypto'
 import { register, syncBuiltinESMExports } from 'node:module'
 import { test } from 'node:test'
+import { setTimeout as delay } from 'node:timers/promises'
 import { database, query } from '../lib/db.js'
 import { hashPassword, tokenHash } from '../lib/password.js'
 import { testDatabase } from './support/database.js'
@@ -28,12 +29,53 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
   let administrator
   let eventId
 
+  function withSession(token, callback) {
+    return runRequest(ip, () => {
+      cookies().set('terrapin_session', token)
+      return callback()
+    })
+  }
+
+  async function session(accountId) {
+    const token = randomBytes(32).toString('hex')
+    await query("insert into sessions(token_hash,account_id,expires_at) values($1,$2,now()+interval '30 minutes')",
+      [tokenHash(token), accountId])
+    const actor = await withSession(token, () => auth.currentUser({ forWrite: true }))
+    return { token, actor }
+  }
+
   async function account(number, roles = ['attendee']) {
-    const { rows: [row] } = await query('insert into accounts(name,email,password_hash,roles) values($1,$2,$3,$4) returning id,name,email,roles',
+    const { rows: [row] } = await query('insert into accounts(name,email,password_hash,roles) values($1,$2,$3,$4) returning id',
       ['Test Account', email(number), await hashPassword(password), roles])
     ownerIds.push(row.id)
     subjects.push(tokenHash(String(row.id)))
-    return row
+    return (await session(row.id)).actor
+  }
+
+  async function waitForBlockedBy(blocker) {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const { rows: [waiting] } = await query(`select pid from pg_stat_activity
+        where datname=current_database() and wait_event_type='Lock' and $1=any(pg_blocking_pids(pid))`, [blocker])
+      if (waiting) return waiting.pid
+      await delay(25)
+    }
+    assert.fail('Expected a PostgreSQL operation to wait for the fixture lock.')
+  }
+
+  async function withBlockedWrite(lock, params, start, whileBlocked) {
+    const blocker = await database().connect()
+    let write
+    try {
+      await blocker.query('begin')
+      await blocker.query(lock, params)
+      write = start().catch(error => error)
+      await whileBlocked(await waitForBlockedBy(blocker.processID))
+    } finally {
+      await blocker.query('rollback')
+      blocker.release()
+      await write
+    }
+    return write
   }
 
   const form = fields => {
@@ -90,7 +132,9 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
         where s.account_id=$1`, [created.id])
       assert.equal(session.idle_seconds, 30 * 60)
       assert.equal(session.maximum_seconds, 12 * 60 * 60)
-      assert.equal((await auth.currentUser()).id, created.id)
+      const profile = await auth.currentUser()
+      assert.equal(profile.id, created.id)
+      assert.equal(Object.hasOwn(profile, 'sessionHash'), false)
       const cookie = cookies().get('terrapin_session')
       assert.equal(cookie.httpOnly, true)
       assert.equal(cookie.sameSite, 'lax')
@@ -137,6 +181,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       await auth.updateAccount(administrator, organizer.id, form({ role: 'organizer' }))
       assert.equal(await auth.currentUser(), null)
       await auth.updateAccount(administrator, organizer.id, roles)
+      organizer = (await session(organizer.id)).actor
 
       const { rows } = await query('select actor_id,action,outcome,source_ip from audit_entries where target=$1 and source_ip=$2',
         [String(organizer.id), ip])
@@ -224,6 +269,87 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       assert.ok((await events.organizerEvents(organizer)).rows.some(row => row.id === eventId))
     })
 
+    await t.test('sign-out revokes a registration waiting on the event lock', async () => {
+      const attendee = await account(16)
+      const { token, actor } = await session(attendee.id)
+      const result = await withBlockedWrite('select id from events where id=$1 for update', [eventId],
+        () => events.changeRegistration(actor, eventId, false),
+        () => withSession(token, auth.signOut))
+
+      assert.match(result.message, /session ended/)
+      assert.equal((await events.registration(attendee, eventId)).rowCount, 0)
+      assert.equal((await query('select 1 from notifications where account_id=$1', [attendee.id])).rowCount, 0)
+      assert.equal((await query(`select 1 from audit_entries where actor_id=$1 and target=$2
+        and action='registration_create' and outcome='denied'`, [attendee.id, String(eventId)])).rowCount, 1)
+      assert.equal((await query('select 1 from sessions where token_hash=$1', [attendee.sessionHash])).rowCount, 1)
+    })
+
+    await t.test('sign-out waits for an authorized registration to commit', async t => {
+      const attendee = await account(17)
+      const { token, actor } = await session(attendee.id)
+      t.after(async () => {
+        await query('delete from notifications where account_id=$1', [attendee.id])
+        await query('delete from registrations where account_id=$1', [attendee.id])
+      })
+
+      let loggedOut
+      const result = await withBlockedWrite('lock table notifications in share mode', [],
+        () => events.changeRegistration(actor, eventId, false),
+        async writerPid => {
+          loggedOut = withSession(token, async () => {
+            await auth.signOut()
+            return (await events.registration(attendee, eventId)).rowCount
+          }).catch(error => error)
+          await waitForBlockedBy(writerPid)
+        })
+
+      assert.match(result, /seat is confirmed/)
+      assert.equal(await loggedOut, 1)
+      await assert.rejects(events.changeRegistration(actor, eventId, true), /session ended/)
+    })
+
+    await t.test('sign-out revokes an account update waiting on its target', async () => {
+      const { token, actor } = await session(administrator.id)
+      const target = await account(18)
+      const result = await withBlockedWrite('select id from accounts where id=$1 for no key update', [target.id],
+        () => auth.updateAccount(actor, target.id, form({ active: 'on', role: 'organizer' })),
+        () => withSession(token, auth.signOut))
+
+      assert.match(result.message, /session ended/)
+      assert.deepEqual((await query('select roles from accounts where id=$1', [target.id])).rows[0].roles, ['attendee'])
+      assert.equal((await query(`select 1 from audit_entries where actor_id=$1 and target=$2
+        and action='account_update' and outcome='denied'`, [actor.id, String(target.id)])).rowCount, 1)
+    })
+
+    await t.test('a resolved actor cannot write after either session deadline expires', async () => {
+      const attendee = await account(19)
+      for (const deadline of ['expires_at', 'absolute_expires_at']) {
+        const { actor } = await session(attendee.id)
+        await query(`update sessions set ${deadline}=now()-interval '1 second' where token_hash=$1`, [actor.sessionHash])
+        await assert.rejects(events.changeRegistration(actor, eventId, false), /session ended/)
+      }
+      assert.equal((await events.registration(attendee, eventId)).rowCount, 0)
+    })
+
+    await t.test('sign-in skips expired sessions locked by another transaction', async () => {
+      const attendee = await account(20)
+      const signinIp = ip + ':1'
+      subjects.push(tokenHash(signinIp))
+      await query("update sessions set expires_at=now()-interval '1 second' where token_hash=$1", [attendee.sessionHash])
+      const blocker = await database().connect()
+      try {
+        await blocker.query('begin')
+        await blocker.query('select 1 from sessions where token_hash=$1 for key share', [attendee.sessionHash])
+        await runRequest(signinIp, () => auth.authenticate(credentials(administrator.email), false))
+        assert.equal((await query('select 1 from sessions where token_hash=$1', [attendee.sessionHash])).rowCount, 1)
+      } finally {
+        await blocker.query('rollback')
+        blocker.release()
+      }
+      await runRequest(signinIp, () => auth.authenticate(credentials(administrator.email), false))
+      assert.equal((await query('select 1 from sessions where token_hash=$1', [attendee.sessionHash])).rowCount, 0)
+    })
+
     await t.test('FR-14–15 cap concurrent submissions and order and filter the approval queue', async () => {
       const ownerA = await account(6, ['attendee', 'organizer'])
       const ownerB = await account(7, ['attendee', 'organizer'])
@@ -295,8 +421,8 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       await assert.rejects(events.changeRegistration(attendee, id, false), /permission/)
       assert.equal((await events.registration(attendee, id)).rowCount, 0)
 
-      const { rows } = await query(`select actor_id,action from audit_entries
-        where target=$1 and outcome='denied' order by id`, [String(id)])
+      const { rows } = await query(`select actor_id,action from audit_entries where target=$1 and outcome='denied'
+        and action in ('draft_save', 'approve', 'registration_create') order by id`, [String(id)])
       assert.deepEqual(rows, [
         { actor_id: owner.id, action: 'draft_save' },
         { actor_id: reviewer.id, action: 'approve' },
