@@ -39,7 +39,7 @@ Use an isolated staging database shared by Next.js and Spring. As the database o
 
 Next.js sends a session digest to `POST /internal/session/resolve` using the service credential. Spring renews the 30-minute idle deadline up to the existing absolute deadline and rejects revoked, expired, and inactive sessions. Next.js still issues and revokes the cookies, and event and account writes still recheck the session inside their transactions. An unavailable session service stops protected requests. To roll back, remove both Next.js session settings and redeploy. Existing sessions remain compatible with the local resolver.
 
-Keep these settings unset in production until the staging verification is complete. Spring sign-in, protected event and registration writes, and the notification outbox remain migration work.
+Spring readiness checks the catalog connection. Verify the authenticated session route separately after enabling the identity connection. Keep these settings unset in production until the staging verification is complete. Spring sign-in, protected event and registration writes, and the notification outbox remain migration work.
 
 ## Verify
 

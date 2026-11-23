@@ -60,7 +60,7 @@ The prototype uses in-app notifications and sample venues. The [requirements and
 
 ## Spring Boot staging
 
-The [Java 21 and Spring Boot setup](backend/README.md) runs a separate read-only catalog API. In local or staging Next.js, `SPRING_CATALOG_URL` switches Explore’s listing and venue filters to that API. Start both services against the same staging database, with separate runtime roles. Production currently uses Next.js for its workflows and database reads.
+The [Java 21 and Spring Boot setup](backend/README.md) runs a separate read-only catalog API. In local or staging Next.js, `SPRING_CATALOG_URL` switches Explore’s listing and venue filters to that API. Start both services against the same staging database, with separate runtime roles. Staging can also opt into [Spring session resolution](backend/README.md#stage-session-resolution). Production currently uses Next.js for its workflows and database reads.
 
 ## Prototype verification
 
