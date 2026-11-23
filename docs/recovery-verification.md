@@ -31,6 +31,12 @@ On November 19, 2026 at 11:31 p.m. Eastern, an isolated schema-only Neon branch 
 
 The test began with a running source and measured recovery of a small synthetic dataset. Daily backup coverage, backup age monitoring, production recovery at realistic data volume, and an application redeploy or traffic switch still need operating evidence.
 
+## Preview restore rehearsal
+
+On November 22, 2026, a separate Neon recovery branch was created at a selected WAL position of `pr-preview`. The rehearsal preserved an audit marker written before the recovery point and excluded the simulated change committed later. The selected point preceded the simulated incident by 1.111 seconds. A local production build connected to the recovered branch with the restricted Preview login and passed database readiness and catalog checks 2.377 seconds after the simulated incident.
+
+The project reported a six-hour history window. This drill measured a small synthetic dataset. Daily backup monitoring, full-volume recovery, and a hosted traffic cutover still require operating evidence.
+
 ## Recovery and retention procedure
 
 1. Confirm the Neon backup mechanism, available restore window, responsible maintainer, and alert destination. Record whether the restore capability meets the one-day data-loss objective in the deployment plan. [Neon history window](https://neon.com/docs/postgres/backup-restore/history-window)
