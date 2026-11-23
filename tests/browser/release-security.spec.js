@@ -23,4 +23,8 @@ test('uses fresh script nonces and renders the sign-in form with an enforced CSP
   const nextNonce = second.headers()['content-security-policy']?.match(/script-src 'nonce-([^']+)'/)?.[1]
   expect(nextNonce).toBeTruthy()
   expect(nextNonce).not.toBe(nonce)
+
+  const missing = await request.get('/missing-page')
+  expect(missing.status()).toBe(404)
+  expect(missing.headers()['content-security-policy']).toContain("frame-ancestors 'none'")
 })
