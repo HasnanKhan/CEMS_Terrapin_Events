@@ -8,13 +8,22 @@ if (runtimeDatabase.protocol !== database.protocol ||
   throw new Error('TEST_RUNTIME_DATABASE_URL must target the same isolated test database.')
 }
 
-const springCatalog = process.env.TEST_SPRING_CATALOG_URL ?? ''
-if (springCatalog) {
-  const origin = new URL(springCatalog)
+function testSpringOrigin(key) {
+  const value = process.env[key] ?? ''
+  if (!value) return ''
+  const origin = new URL(value)
   if (origin.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname)
     || origin.href !== origin.origin + '/') {
-    throw new Error('Set TEST_SPRING_CATALOG_URL to an isolated HTTP origin on localhost.')
+    throw new Error(`Set ${key} to an isolated HTTP origin on localhost.`)
   }
+  return origin.origin
+}
+
+const springCatalog = testSpringOrigin('TEST_SPRING_CATALOG_URL')
+const springSession = testSpringOrigin('TEST_SPRING_SESSION_URL')
+const springSessionToken = process.env.TEST_SPRING_SESSION_SERVICE_TOKEN ?? ''
+if (Boolean(springSession) !== Boolean(springSessionToken) || (springSessionToken && !/^[a-f0-9]{64}$/.test(springSessionToken))) {
+  throw new Error('Set both TEST_SPRING_SESSION_URL and a 64-character hexadecimal TEST_SPRING_SESSION_SERVICE_TOKEN.')
 }
 
 const baseURL = 'http://localhost:3117'
@@ -40,7 +49,9 @@ export default defineConfig({
       BOOTSTRAP_PASSWORD: 'BrowserCoordinatorTest1',
       SEED_DEMO: 'false',
       SELF_SIGNUP_ENABLED: 'true',
-      SPRING_CATALOG_URL: springCatalog
+      SPRING_CATALOG_URL: springCatalog,
+      SPRING_SESSION_URL: springSession,
+      SPRING_SESSION_SERVICE_TOKEN: springSessionToken
     }
   }
 })

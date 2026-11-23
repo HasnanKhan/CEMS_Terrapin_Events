@@ -30,6 +30,7 @@ class CatalogDatabaseSecurityTest {
                 "select id from public.registrations where false",
                 "select id from public.venues where false",
                 "select token_hash from public.sessions where false",
+                "select id from cems_identity.resolve_session(null)",
                 "select id from public.audit_entries where false",
                 "update cems_catalog.venues set name = name where false"
         }) {
