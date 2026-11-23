@@ -10,6 +10,7 @@
     "db:setup": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/setup.mjs",
     "db:provision-runtime": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/provision-runtime.mjs",
     "test": "node --test tests/*.test.js",
+    "test:unit-coverage": "c8 --all --include=lib/input.js --include=lib/password.js --check-coverage --per-file --statements=80 node --test tests/input.test.js tests/password.test.js",
     "test:coverage": "c8 --all --include=\"lib/*.js\" --check-coverage --per-file --statements=80 npm test",
     "test:browser": "playwright test"
   },
