@@ -430,6 +430,64 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       ])
     })
 
+    await t.test('FR-8 applies every optional role combination in the existing session', async () => {
+      const target = await account(21)
+      const { token } = await session(target.id)
+      const roles = ['organizer', 'administrator', 'system_admin']
+      for (let mask = 0; mask < 2 ** roles.length; mask++) {
+        const requestedRoles = roles.filter((_, index) => mask & (1 << index))
+        const changes = form({ active: 'on' })
+        for (const role of requestedRoles) changes.append('role', role)
+        await auth.updateAccount(administrator, target.id, changes)
+        assert.deepEqual((await withSession(token, auth.currentUser)).roles, ['attendee', ...requestedRoles])
+      }
+      await auth.updateAccount(administrator, target.id, form({ active: 'on' }))
+      assert.deepEqual((await withSession(token, auth.currentUser)).roles, ['attendee'])
+    })
+
+    await t.test('FR-9 denies writes without the required role or event ownership and audits each denial', async () => {
+      const owner = await account(22, ['attendee', 'organizer'])
+      const otherOrganizer = await account(23, ['attendee', 'organizer'])
+      const reviewer = await account(24, ['attendee', 'administrator'])
+      const attendee = await account(25)
+      const date = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10)
+      const venue = (await events.venues()).rows.find(row => row.name === 'Iribe Center')
+      const details = {
+        title: 'Protected write verification', description: 'Access tests', category: 'Academic',
+        host: 'Sample organization', venue: String(venue.id), capacity: '1',
+        starts: date + 'T17:00', ends: date + 'T18:00', deadline: date + 'T16:00'
+      }
+      const draft = await events.saveDraft(owner, null, form(details))
+      queueEventIds.push(draft)
+      const pending = await events.saveDraft(owner, null, form(details))
+      queueEventIds.push(pending)
+      await events.changeEvent(owner, pending, 'submit', form({}))
+
+      const cases = [
+        { actor: attendee, action: 'draft_save', target: null, attempt: () => events.saveDraft(attendee, null, form(details)) },
+        { actor: otherOrganizer, action: 'draft_save', target: draft, attempt: () => events.saveDraft(otherOrganizer, draft, form(details)) },
+        { actor: otherOrganizer, action: 'submit', target: draft, attempt: () => events.changeEvent(otherOrganizer, draft, 'submit', form({})) },
+        { actor: owner, action: 'approve', target: pending, attempt: () => events.changeEvent(owner, pending, 'approve', form({})) },
+        { actor: attendee, action: 'capacity', target: eventId, attempt: () => events.changeEvent(attendee, eventId, 'capacity', form({ capacity: '2' })) },
+        { actor: null, action: 'registration_create', target: eventId, attempt: () => events.changeRegistration(null, eventId, false) },
+        { actor: null, action: 'registration_cancel', target: eventId, attempt: () => events.changeRegistration(null, eventId, true) },
+        { actor: reviewer, action: 'account_update', target: attendee.id, attempt: () => auth.updateAccount(reviewer, attendee.id, form({ active: 'on', role: 'organizer' })) }
+      ]
+
+      for (const { actor, action, target, attempt } of cases) {
+        await assert.rejects(attempt, /sign in first|do not have permission|do not own this event/, action)
+        const audit = await query(`select 1 from audit_entries
+          where actor_id is not distinct from $1 and action=$2 and target is not distinct from $3
+            and outcome='denied' and source_ip=$4`, [actor?.id ?? null, action, target === null ? null : String(target), ip])
+        assert.ok(audit.rowCount > 0, action + ' was audited')
+      }
+
+      assert.equal((await events.getEvent(draft, owner)).status, 'draft')
+      assert.equal((await events.getEvent(pending, reviewer)).status, 'pending')
+      assert.equal((await events.getEvent(eventId, null)).capacity, 1)
+      assert.deepEqual((await query('select roles from accounts where id=$1', [attendee.id])).rows[0].roles, ['attendee'])
+    })
+
     await t.test('FR-26–35, FR-37, FR-39–40 and FR-45 keep seats and inbox records consistent', async () => {
       assert.ok(eventId)
       const users = await Promise.all([3, 4, 5].map(number => account(number)))

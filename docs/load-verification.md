@@ -46,3 +46,15 @@ LOAD_TEST_RUNTIME_DATABASE_URL="$(env -u DATABASE_URL node --env-file=.env.runti
 ## Measurement scope
 
 Each read phase warms its route, then issues 100 concurrent requests before proceeding to the next phase. The script measures full HTTP response bodies and uses the nearest-rank p95. The registration phase preloads the authenticated forms and then measures 100 concurrent submissions for one event, including the redirect and resulting HTML response. Chromium parses the rendered form fields before timing starts. Login, browser rendering and hydration, asset downloads, geographic latency, cold starts, and sustained traffic remain outside this measurement. Hosted Vercel and Neon performance requires a separate nonproduction run.
+
+## Hosted Preview
+
+A protected Vercel Preview of commit `463cc4b` ran on November 22, 2026 against the isolated Neon `pr-preview` branch. A unique fictional event confirmed the database boundary. The runs used temporary test access, synthetic accounts, and the app's restricted runtime login. Warmed browse, search, and detail measured full HTTP responses. Registration measured the ordinary form submission, redirect, and resulting response.
+
+| Users | Browse p95 | Search p95 | Detail p95 | Registration p95 | Registration max |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 1,033 ms | 430 ms | 278 ms | 1,060 ms | 1,060 ms |
+| 100 | 814 ms | 596 ms | 566 ms | 2,207 ms | 2,863 ms |
+| SRS target | ≤3,000 ms | ≤3,000 ms | ≤3,000 ms | ≤2,000 ms | |
+
+The 100-user burst produced 20 confirmed seats and 80 waitlist places with zero duplicate or lost registrations and three FIFO promotions. The 10-user run produced five confirmed seats and five waitlist places with the same integrity result. An earlier attempt stopped when Vercel redirected some concurrent requests. The recorded runs removed the synthetic load fixtures and revoked the temporary access. The larger registration burst missed the p95 target by 207 ms. Sustained load and browser-rendered latency remain open.

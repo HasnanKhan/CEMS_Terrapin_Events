@@ -67,9 +67,10 @@ The [Java 21 and Spring Boot setup](backend/README.md) runs a separate read-only
 | Command | What it checks |
 | --- | --- |
 | `npm test` | Node tests, with database cases enabled when `TEST_DATABASE_URL` is set. |
+| `npm run test:unit-coverage` | At least 80% statement coverage per file for the input and password modules using unit tests alone. |
 | `npm run test:coverage` | At least 80% statement coverage per file under `lib/` across the Node suite. |
 | `npm run test:browser` | Chromium workflows and axe checks on public pages at phone and desktop widths. |
-| `./mvnw verify` from `backend` | Spring and PostgreSQL integration tests using the [Spring test fixtures](backend/README.md#verify). |
+| `./mvnw clean verify` from `backend` | Spring and PostgreSQL integration tests and an 80% Java line coverage gate using the [Spring test fixtures](backend/README.md#verify). |
 
 For the full Node and browser suites, install the PostgreSQL command-line client (`psql`) and set `TEST_DATABASE_URL` to a plain URL for a disposable local database. To exercise the restricted Next.js role, also set `TEST_RUNTIME_DATABASE_URL` to its connection for the same database.
 

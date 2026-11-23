@@ -30,6 +30,8 @@ Monitor Spring's readiness probe separately in staging. The Next.js `/api/health
 
 ## Verify
 
-Apply the [catalog test fixtures](src/test/resources/catalog-fixtures.sql) as the owner of a fresh disposable local PostgreSQL database with the schema and grants above. Run `./mvnw verify` from `backend` with that database's catalog login. GitHub Actions runs the same checks on an isolated PostgreSQL 16 service. Spring and Hibernate schema initialization remain disabled.
+Apply the [catalog test fixtures](src/test/resources/catalog-fixtures.sql) as the owner of a fresh disposable local PostgreSQL database with the schema and grants above. Run `./mvnw clean verify` from `backend` with that database's catalog login. GitHub Actions runs the same checks on an isolated PostgreSQL 16 service. Spring and Hibernate schema initialization remain disabled.
+
+JaCoCo enforces 80% aggregate Java source line coverage across the Maven test run, including the PostgreSQL integration tests. A line is covered when the tests execute an instruction mapped to it. Branch coverage appears in the report. Open `target/site/jacoco/index.html` locally or download the `spring-coverage` artifact from GitHub Actions for the HTML and XML reports.
 
 The Spring CI workflow runs Chromium against both services. The first test uses a separate Next.js database to verify that Explore gets its results from Spring. The workflow then runs the event and registration journeys with both services sharing one disposable database, followed by an outage check with Spring stopped. Failed browser runs retain traces and the Spring process log for seven days. Node and browser fixtures require plain loopback database URLs.
