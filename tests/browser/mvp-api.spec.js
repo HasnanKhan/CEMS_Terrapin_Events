@@ -79,9 +79,8 @@ async function expectError(response, status, code) {
 
 test('P-1 gives exactly one remaining seat to fifty concurrent REST registrations', async ({ request, baseURL }) => {
   await withFixtures(async ({ db, createAccounts, createEvent }) => {
-    const [owner, seated, ...applicants] = await createAccounts([organizerRoles, ...Array(51).fill(attendeeRoles)])
-    const event = await createEvent(owner, { capacity: 2 })
-    await db.query("insert into registrations(event_id,account_id,status) values($1,$2,'confirmed')", [event.id, seated.id])
+    const [owner, ...applicants] = await createAccounts([organizerRoles, ...Array(50).fill(attendeeRoles)])
+    const event = await createEvent(owner, { capacity: 1 })
 
     const responses = await Promise.all(applicants.map(actor => register(request, baseURL, event.id, actor)))
     const results = await Promise.all(responses.map(async response => {
@@ -93,16 +92,27 @@ test('P-1 gives exactly one remaining seat to fifty concurrent REST registration
     expect(results.filter(result => result.status === 'waitlisted')).toHaveLength(49)
     expect(new Set(results.map(result => result.id)).size).toBe(50)
 
-    const { rows: persisted } = await db.query('select id,account_id,status from registrations where event_id=$1 order by id', [event.id])
+    const { rows: persisted } = await db.query('select id,account_id,status,created_at from registrations where event_id=$1 order by id', [event.id])
     expect(persisted.map(row => row.account_id).sort((a, b) => a - b))
-      .toEqual([seated.id, ...applicants.map(actor => actor.id)].sort((a, b) => a - b))
-    const winner = persisted.find(row => row.status === 'confirmed' && row.account_id !== seated.id)
+      .toEqual(applicants.map(actor => actor.id).sort((a, b) => a - b))
+    const winner = persisted.find(row => row.status === 'confirmed')
     expect(results.find(result => result.status === 'confirmed')).toEqual({ id: winner?.id, status: 'confirmed' })
     const byId = new Map(results.map(result => [result.id, result]))
     for (const [index, row] of persisted.filter(row => row.status === 'waitlisted').entries()) {
       expect(byId.get(row.id)).toEqual({ id: row.id, status: 'waitlisted', position: index + 1 })
     }
-    expect(persisted.filter(row => row.status === 'confirmed')).toHaveLength(2)
+    expect(persisted.filter(row => row.status === 'confirmed')).toHaveLength(1)
+
+    const roster = await request.get(eventPath(event.id, 'roster'), { headers: session(owner) })
+    expect(roster.status()).toBe(200)
+    const { event: rosterEvent, rows } = await roster.json()
+    expect(rosterEvent).toMatchObject({ id: event.id, title: event.title, status: 'published' })
+    const rosterAccounts = new Map(applicants.map(actor => [actor.id, actor]))
+    expect(rows).toEqual(persisted.map(row => {
+      const { name, email } = rosterAccounts.get(row.account_id)
+      return { name, email, status: row.status, created_at: row.created_at.toISOString() }
+    }))
+
     const { rows: notices } = await db.query('select account_id from notifications where event_id=$1 order by account_id', [event.id])
     expect(notices.map(notice => notice.account_id)).toEqual(applicants.map(actor => actor.id).sort((a, b) => a - b))
   })
