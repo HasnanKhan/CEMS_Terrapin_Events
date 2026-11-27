@@ -107,7 +107,7 @@ jobs:
             TEST_RUNTIME_DATABASE_URL=postgresql://terrapin_runtime:terrapin_runtime_test@127.0.0.1:5432/terrapin_spring_test \
             TEST_SPRING_SESSION_URL="$TEST_SPRING_CATALOG_URL" \
             TEST_SPRING_SESSION_SERVICE_TOKEN="$CEMS_SESSION_SERVICE_TOKEN" \
-            npm run test:browser -- mvp.spec.js event-directory.spec.js account-access.spec.js \
+            npm run test:browser -- mvp.spec.js mvp-api.spec.js event-directory.spec.js account-access.spec.js \
               --output=test-results/spring-shared-database
           kill "$spring_pid"
           wait "$spring_pid" || true
