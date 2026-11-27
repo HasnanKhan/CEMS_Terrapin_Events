@@ -4,8 +4,8 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { authenticate, currentUser, signOut, updateAccount } from '../lib/auth.js'
 import { changeEvent, saveDraft } from '../lib/event/service.js'
-import { changeRegistration, updateCapacity } from '../lib/registration/service.js'
-import { optionalId, Problem } from '../lib/input.js'
+import { cancelRegistration, register, updateCapacity } from '../lib/registration/service.js'
+import { formText, optionalId, Problem } from '../lib/input.js'
 import { feedbackRedirect } from './feedback.js'
 import { actionDestination, authPath, browseFilters } from './navigation.js'
 
@@ -39,9 +39,16 @@ export async function submit(action, target, destination, previous, form) {
           message = await updateCapacity(user, target, form)
           break
         case 'register':
-        case 'cancel':
-          message = await changeRegistration(user, target, action === 'cancel')
+          message = (await register(user, target)).message
           break
+        case 'cancel': {
+          const expectedStatus = formText(form, 'registrationStatus')
+          if (expectedStatus !== 'confirmed' && expectedStatus !== 'waitlisted') {
+            throw new Problem('Refresh the page and try again.')
+          }
+          message = (await cancelRegistration(user, target, expectedStatus)).message
+          break
+        }
         case 'account':
           await updateAccount(user, target, form)
           message = 'Account updated.'

@@ -152,5 +152,6 @@ The Next.js prototype separates [event and approval](../lib/event/), [registrati
 | Administrator roster access covered published events only. | Added a role-checked directory that includes all event statuses. |
 | One demo account retained a legacy scrypt hash. | Verified the existing bootstrap password and upgraded its hash in production Neon. Confirmed zero legacy hashes afterward. |
 | Event-card links had mismatched visible and accessible names. | Fixed and verified through a browser regression and follow-up automated scan. |
+| A stale My Events form could cancel a replacement registration or release a newly promoted seat under the old waitlist label. | The UI now cancels by registration ID and verifies the displayed status under the event lock. Chromium checks that both stale requests leave the current seat intact. [Regression test](../tests/browser/mvp-api.spec.js) |
 | Homepage color contrast requires manual review. | Open in the accessibility acceptance checks. |
 | Operational retention, restore, and application security evidence are incomplete. | Open in the nonfunctional acceptance checks. |
