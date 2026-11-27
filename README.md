@@ -4,6 +4,10 @@ Terrapin Events is a University of Maryland course prototype for discovering, ap
 
 [Run locally](#run-locally) · [Try Spring Boot](#spring-boot-staging) · [Run tests](#prototype-verification) · [Deploy](#deploy-to-vercel-and-neon)
 
+## ENPM 613 code deliverable
+
+Start with the [PA5 repository guide](docs/pa5/README.md) for the submission reference, source inventory, and verification runs. The [final SAD](docs/pa5/SAD.md), [final SADD](docs/pa5/SADD.md), and [architecture-to-implementation traceability matrix](docs/pa5/traceability.md) describe the deployed prototype, the Spring Boot staging components, and the differences from the original design.
+
 ## Run locally
 
 You need Node.js 22 and a PostgreSQL database. If you already have PostgreSQL, use its connection URL. To start a local database with Docker, run the following once.
