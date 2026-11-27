@@ -284,3 +284,51 @@ test('REST cancellation retains history, promotes in order, and protects replace
       .toEqual([{ status: 'confirmed' }])
   })
 })
+
+test('a stale My Events form preserves replacement and newly confirmed registrations', async ({ page, request, baseURL }) => {
+  await withFixtures(async ({ db, createAccounts, createEvent }) => {
+    const [owner, attendee, waiting] = await createAccounts([organizerRoles, attendeeRoles, attendeeRoles])
+    const event = await createEvent(owner)
+    const cancel = id => request.delete(`/api/registrations/${id}`, {
+      headers: { ...session(attendee), Origin: new URL(baseURL).origin }
+    })
+    const staleNotice = page.getByRole('main').getByRole('alert')
+    const staleMessage = 'This registration has changed. Refresh the page to review it.'
+    const first = await register(request, baseURL, event.id, attendee)
+    expect(first.status()).toBe(201)
+    const { id: originalId } = await first.json()
+
+    await page.context().addCookies([{ name: 'terrapin_session', value: attendee.token, url: baseURL }])
+    await page.goto('/?view=my')
+    await page.locator('summary').filter({ hasText: 'Cancel registration' }).click()
+    const confirm = page.getByRole('button', { name: 'Confirm cancellation for ' + event.title, exact: true })
+    await expect(confirm).toBeVisible()
+
+    expect((await cancel(originalId)).status()).toBe(200)
+    const replacement = await register(request, baseURL, event.id, attendee)
+    expect(replacement.status()).toBe(201)
+    const { id: replacementId } = await replacement.json()
+    expect(replacementId).not.toBe(originalId)
+
+    await confirm.click()
+    await expect(staleNotice).toHaveText(staleMessage)
+    await expect(staleNotice).toBeFocused()
+    expect((await db.query('select id,status from registrations where event_id=$1 order by id', [event.id])).rows)
+      .toEqual([{ id: originalId, status: 'cancelled' }, { id: replacementId, status: 'confirmed' }])
+
+    const waitlist = await register(request, baseURL, event.id, waiting)
+    expect(waitlist.status()).toBe(201)
+    const { id: waitingId } = await waitlist.json()
+    await page.context().addCookies([{ name: 'terrapin_session', value: waiting.token, url: baseURL }])
+    await page.reload()
+    await page.locator('summary').filter({ hasText: 'Leave waitlist' }).click()
+    const leave = page.getByRole('button', { name: 'Confirm leaving waitlist for ' + event.title, exact: true })
+    await expect(leave).toBeVisible()
+
+    expect((await cancel(replacementId)).status()).toBe(200)
+    await leave.click()
+    await expect(staleNotice).toHaveText(staleMessage)
+    expect((await db.query('select status,cancelled_at from registrations where id=$1', [waitingId])).rows)
+      .toEqual([{ status: 'confirmed', cancelled_at: null }])
+  })
+})

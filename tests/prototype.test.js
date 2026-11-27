@@ -250,7 +250,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       eventId = await events.saveDraft(organizer, null, form(details))
       assert.equal(await events.getEvent(eventId, null), null)
       assert.equal((await events.getEvent(eventId, organizer)).status, 'draft')
-      await assert.rejects(events.changeRegistration(organizer, eventId, false), /Registration is closed/)
+      await assert.rejects(events.register(organizer, eventId), /Registration is closed/)
       assert.equal(await events.getEvent(eventId, administrator), null)
       assert.deepEqual(await events.roster(eventId, administrator), {
         event: { id: eventId, title: details.title, status: 'draft', starts_at: (await events.getEvent(eventId, organizer)).starts_at },
@@ -267,7 +267,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       assert.ok((await events.approvalQueue(administrator, organizer.id)).rows.some(row => row.id === eventId))
       assert.equal((await events.getEvent(eventId, administrator)).status, 'pending')
       assert.equal((await events.roster(eventId, administrator)).event.status, 'pending')
-      await assert.rejects(events.changeRegistration(organizer, eventId, false), /Registration is closed/)
+      await assert.rejects(events.register(organizer, eventId), /Registration is closed/)
       await events.changeEvent(administrator, eventId, 'approve', form({}))
       const { rows } = await events.publicEvents({ keyword: marker.toUpperCase(), category: 'Academic', venue: venue.id, page: 1 })
       assert.equal(rows.length, 1)
@@ -279,7 +279,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       const attendee = await account(16)
       const { token, actor } = await session(attendee.id)
       const result = await withBlockedWrite('select id from events where id=$1 for update', [eventId],
-        () => events.changeRegistration(actor, eventId, false),
+        () => events.register(actor, eventId),
         () => withSession(token, auth.signOut))
 
       assert.match(result.message, /session ended/)
@@ -300,7 +300,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
 
       let loggedOut
       const result = await withBlockedWrite('lock table notifications in share mode', [],
-        () => events.changeRegistration(actor, eventId, false),
+        () => events.register(actor, eventId),
         async writerPid => {
           loggedOut = withSession(token, async () => {
             await auth.signOut()
@@ -309,9 +309,9 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
           await waitForBlockedBy(writerPid)
         })
 
-      assert.match(result, /seat is confirmed/)
+      assert.match(result.message, /seat is confirmed/)
       assert.equal(await loggedOut, 1)
-      await assert.rejects(events.changeRegistration(actor, eventId, true), /session ended/)
+      await assert.rejects(events.cancelRegistration(actor, result.id), /session ended/)
     })
 
     await t.test('sign-out revokes an account update waiting on its target', async () => {
@@ -332,7 +332,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       for (const deadline of ['expires_at', 'absolute_expires_at']) {
         const { actor } = await session(attendee.id)
         await query(`update sessions set ${deadline}=now()-interval '1 second' where token_hash=$1`, [actor.sessionHash])
-        await assert.rejects(events.changeRegistration(actor, eventId, false), /session ended/)
+        await assert.rejects(events.register(actor, eventId), /session ended/)
       }
       assert.equal((await events.registration(attendee, eventId)).rowCount, 0)
     })
@@ -424,7 +424,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       await events.changeEvent(reviewer, id, 'approve', form({}))
 
       await auth.updateAccount(administrator, attendee.id, form({}))
-      await assert.rejects(events.changeRegistration(attendee, id, false), /permission/)
+      await assert.rejects(events.register(attendee, id), /permission/)
       assert.equal((await events.registration(attendee, id)).rowCount, 0)
 
       const { rows } = await query(`select actor_id,action from audit_entries where target=$1 and outcome='denied'
@@ -475,8 +475,8 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
         { actor: otherOrganizer, action: 'submit', target: draft, attempt: () => events.changeEvent(otherOrganizer, draft, 'submit', form({})) },
         { actor: owner, action: 'approve', target: pending, attempt: () => events.changeEvent(owner, pending, 'approve', form({})) },
         { actor: attendee, action: 'capacity', target: eventId, attempt: () => events.updateCapacity(attendee, eventId, form({ capacity: '2' })) },
-        { actor: null, action: 'registration_create', target: eventId, attempt: () => events.changeRegistration(null, eventId, false) },
-        { actor: null, action: 'registration_cancel', target: eventId, attempt: () => events.changeRegistration(null, eventId, true) },
+        { actor: null, action: 'registration_create', target: eventId, attempt: () => events.register(null, eventId) },
+        { actor: null, action: 'registration_cancel', target: eventId, attempt: () => events.cancelRegistration(null, eventId) },
         { actor: reviewer, action: 'account_update', target: attendee.id, attempt: () => auth.updateAccount(reviewer, attendee.id, form({ active: 'on', role: 'organizer' })) }
       ]
 
@@ -497,7 +497,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
     await t.test('FR-26–35, FR-37, FR-39–40 and FR-45 keep seats and inbox records consistent', async () => {
       assert.ok(eventId)
       const users = await Promise.all([3, 4, 5].map(number => account(number)))
-      await Promise.all(users.map(user => events.changeRegistration(user, eventId, false)))
+      await Promise.all(users.map(user => events.register(user, eventId)))
       const { rows: roster } = await events.roster(eventId, administrator)
       assert.equal(await events.roster(eventId, users[0]), null)
       const { rows: denials } = await query("select actor_id from audit_entries where action='roster_view' and outcome='denied' and target=$1", [String(eventId)])
@@ -511,11 +511,11 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
         assert.ok(entry.created_at instanceof Date)
         if (entry.position) waiting[entry.position - 1] = user
       }
-      await assert.rejects(events.changeRegistration(confirmed, eventId, false), /already have/)
-      await assert.rejects(events.changeRegistration(waiting[0], eventId, false), /already have/)
+      await assert.rejects(events.register(confirmed, eventId), /already have/)
+      await assert.rejects(events.register(waiting[0], eventId), /already have/)
       await assert.rejects(events.updateCapacity(organizer, eventId, form({ capacity: '999' })), /fit the venue/)
       const { rows: [original] } = await events.registration(confirmed, eventId)
-      await events.changeRegistration(confirmed, eventId, true)
+      await events.cancelRegistration(confirmed, original.id)
       const { rows: [cancelled] } = await query('select status,cancelled_at from registrations where id=$1', [original.id])
       assert.equal(cancelled.status, 'cancelled')
       assert.ok(cancelled.cancelled_at instanceof Date)
@@ -548,21 +548,22 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
         `Your registration for ${title} was cancelled.`,
         `You’re registered for ${title}.`
       ])
-      await events.changeRegistration(confirmed, eventId, false)
+      await events.register(confirmed, eventId)
       const { rows: [rejoined] } = await events.registration(confirmed, eventId)
       assert.equal(rejoined.status, 'waitlisted')
       assert.equal(rejoined.cancelled_at, null)
       assert.ok(rejoined.id > original.id)
-      await events.changeRegistration(confirmed, eventId, true)
+      await events.cancelRegistration(confirmed, rejoined.id)
       const { rows: [cancelledAgain] } = await query('select status,cancelled_at from registrations where id=$1', [rejoined.id])
       assert.equal(cancelledAgain.status, 'cancelled')
       assert.ok(cancelledAgain.cancelled_at instanceof Date)
       assert.equal((await events.registration(confirmed, eventId)).rowCount, 0)
       assert.equal((await events.getEvent(eventId, organizer)).confirmed, 2)
       await query("update events set deadline=now()-interval '1 second' where id=$1", [eventId])
-      await assert.rejects(events.changeRegistration(confirmed, eventId, false), /closed/)
+      await assert.rejects(events.register(confirmed, eventId), /closed/)
       await query("update events set starts_at=now()-interval '1 second' where id=$1", [eventId])
-      await assert.rejects(events.changeRegistration(waiting[0], eventId, true), /already started/)
+      const { rows: [promoted] } = await events.registration(waiting[0], eventId)
+      await assert.rejects(events.cancelRegistration(waiting[0], promoted.id), /already started/)
       assert.equal((await events.registration(waiting[0], eventId)).rows[0].status, 'confirmed')
     })
 

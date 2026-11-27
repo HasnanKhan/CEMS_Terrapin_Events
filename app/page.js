@@ -329,10 +329,12 @@ function Cancellation({ entry, event, now, destination }) {
     <details>
       <summary aria-label={`${label} for ${event.title}`}>{label}</summary>
       <p>{waitlisted ? 'Leaving removes your place in line.' : 'Cancelling releases your confirmed seat.'}</p>
-      <Form action="cancel" target={entry.event_id} destination={destination}
+      <Form action="cancel" target={entry.id} destination={destination}
         label={waitlisted ? 'Confirm leaving waitlist' : 'Confirm cancellation'}
         accessibleLabel={`${waitlisted ? 'Confirm leaving waitlist' : 'Confirm cancellation'} for ${event.title}`}
-        style="quiet" />
+        style="quiet">
+        <input type="hidden" name="registrationStatus" value={entry.status} />
+      </Form>
     </details>
   </div>
 }
