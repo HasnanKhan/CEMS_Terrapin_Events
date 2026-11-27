@@ -3,7 +3,8 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { authenticate, currentUser, signOut, updateAccount } from '../lib/auth.js'
-import { changeEvent, changeRegistration, saveDraft } from '../lib/events.js'
+import { changeEvent, saveDraft } from '../lib/event/service.js'
+import { changeRegistration, updateCapacity } from '../lib/registration/service.js'
 import { optionalId, Problem } from '../lib/input.js'
 import { feedbackRedirect } from './feedback.js'
 import { actionDestination, authPath, browseFilters } from './navigation.js'
@@ -32,8 +33,10 @@ export async function submit(action, target, destination, previous, form) {
         }
         case 'submit':
         case 'approve':
+          message = await changeEvent(user, target, action)
+          break
         case 'capacity':
-          message = await changeEvent(user, target, action, form)
+          message = await updateCapacity(user, target, form)
           break
         case 'register':
         case 'cancel':

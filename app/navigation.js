@@ -1,4 +1,4 @@
-import { categories } from '../lib/events.js'
+import { categories } from '../lib/event/service.js'
 import { optionalId } from '../lib/input.js'
 
 const views = {

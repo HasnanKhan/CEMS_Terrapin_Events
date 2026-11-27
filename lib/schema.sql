@@ -44,10 +44,30 @@ create table if not exists registrations (
   id integer generated always as identity primary key,
   event_id integer not null references events(id),
   account_id integer not null references accounts(id),
-  status text not null check (status in ('confirmed', 'waitlisted')),
+  status text not null,
   created_at timestamptz not null default clock_timestamp(),
-  unique (event_id, account_id)
+  cancelled_at timestamptz,
+  constraint registrations_cancellation_state_check check (
+    (status in ('confirmed', 'waitlisted') and cancelled_at is null)
+    or (status = 'cancelled' and cancelled_at is not null)
+  )
 );
+alter table registrations add column if not exists cancelled_at timestamptz;
+do $$
+begin
+  if not exists (select 1 from pg_constraint
+    where conrelid='registrations'::regclass and conname='registrations_cancellation_state_check') then
+    alter table registrations drop constraint if exists registrations_status_check,
+      add constraint registrations_cancellation_state_check check (
+        (status in ('confirmed', 'waitlisted') and cancelled_at is null)
+        or (status = 'cancelled' and cancelled_at is not null)
+      );
+  end if;
+end;
+$$;
+create unique index if not exists registrations_active_account_event
+  on registrations(event_id, account_id) where status in ('confirmed', 'waitlisted');
+alter table registrations drop constraint if exists registrations_event_id_account_id_key;
 create index if not exists registrations_queue on registrations(event_id, status, id);
 create table if not exists notifications (
   id integer generated always as identity primary key,

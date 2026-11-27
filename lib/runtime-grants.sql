@@ -9,7 +9,7 @@ grant insert (token_hash,account_id,expires_at), update (expires_at), delete
 grant insert (owner_id,venue_id,title,description,category,host,starts_at,ends_at,deadline,capacity),
   update (venue_id,title,description,category,host,starts_at,ends_at,deadline,capacity,status,submitted_at)
   on public.events to terrapin_runtime;
-grant insert (event_id,account_id,status), update (status), delete
+grant insert (event_id,account_id,status), update (status,cancelled_at)
   on public.registrations to terrapin_runtime;
 grant insert (account_id,event_id,kind,message) on public.notifications to terrapin_runtime;
 grant insert, update, delete on public.rate_limits to terrapin_runtime;
