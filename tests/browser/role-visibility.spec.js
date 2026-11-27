@@ -71,7 +71,7 @@ test('scopes workspace, event, and roster visibility by role and ownership', asy
             const allowed = roles.includes(role)
             const expectedHeading = allowed ? heading : account ? 'Access restricted' : 'Sign in'
             await page.goto('/?view=' + view)
-            await expect(page.getByRole('heading', { name: expectedHeading, exact: true })).toBeVisible()
+            await expect(page.getByRole('heading', { name: expectedHeading, exact: true, level: 1 })).toBeVisible()
             if (!allowed) await expect(page.getByRole('heading', { name: heading, exact: true })).toHaveCount(0)
             if (allowed && !checkedWorkspaces.has(view)) {
               const audit = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()
@@ -85,7 +85,7 @@ test('scopes workspace, event, and roster visibility by role and ownership', asy
           for (const [status, { id, title }] of events) {
             const allowed = status === 'published' || ownsEvent || (status === 'pending' && reviewsEvents)
             await page.goto('/?event=' + id)
-            await expect(page.getByRole('heading', { name: allowed ? title : 'Event unavailable', exact: true })).toBeVisible()
+            await expect(page.getByRole('heading', { name: allowed ? title : 'Event unavailable', exact: true, level: 1 })).toBeVisible()
             if (allowed) await expect(page.getByRole('paragraph').filter({ hasText: description })).toBeVisible()
             else await expect(page.getByText(description, { exact: true })).toHaveCount(0)
 
@@ -120,6 +120,44 @@ test('scopes workspace, event, and roster visibility by role and ownership', asy
         [accountIds, eventIds.map(String)])
       await fixtures.query('delete from events where id=any($1)', [eventIds])
       await fixtures.query('delete from accounts where id=any($1)', [accountIds])
+    } finally {
+      await fixtures.end()
+    }
+  }
+})
+
+test('an administrator returns from roster details to the same roster page', async ({ page }) => {
+  const fixtures = new pg.Pool({ connectionString: testDatabase().href })
+  const title = 'Roster navigation ' + randomUUID()
+  let ids = []
+  try {
+    const { rows } = await fixtures.query(`insert into events
+      (owner_id,venue_id,title,description,category,host,starts_at,ends_at,deadline,capacity)
+      select a.id,v.id,$1 || ' ' || n,'Roster navigation fixture','Academic','Test organizer',
+        now()+interval '30 days'+n*interval '1 hour',now()+interval '30 days'+(n+1)*interval '1 hour',
+        now()+interval '1 day',5
+      from accounts a cross join venues v cross join generate_series(1,13) n
+      where a.email='browser-coordinator@umd.edu' and v.name='Iribe Center' returning id`, [title])
+    ids = rows.map(({ id }) => id)
+
+    await page.goto('/?view=login')
+    await signIn(page, 'browser-coordinator@umd.edu', 'BrowserCoordinatorTest1')
+    await page.getByRole('link', { name: 'Approvals', exact: true }).click()
+    await page.getByRole('link', { name: 'Event rosters', exact: true }).click()
+    await page.getByRole('link', { name: 'Next', exact: true }).click()
+    const rosterLink = page.getByRole('link', { name: title + ' 1', exact: true })
+    await expect(rosterLink).toBeVisible()
+    await rosterLink.click()
+    await expect(page.getByRole('heading', { name: title + ' 1', level: 1, exact: true })).toBeVisible()
+    await page.getByRole('link', { name: 'Back to event rosters', exact: true }).click()
+    await expect(page.getByText('Page 2', { exact: true })).toBeVisible()
+    await expect(rosterLink).toBeVisible()
+
+    await page.goto('/?view=rosters&event=2147483647')
+    await expect(page.getByRole('heading', { name: 'Roster unavailable', level: 1 })).toBeVisible()
+  } finally {
+    try {
+      await fixtures.query('delete from events where id=any($1)', [ids])
     } finally {
       await fixtures.end()
     }

@@ -21,7 +21,12 @@ const timeText = date => new Intl.DateTimeFormat('en-US', { timeZone: zone, hour
 const statusLabel = { draft: 'Draft', pending: 'Pending approval', published: 'Published', confirmed: 'Confirmed', waitlisted: 'Waitlisted' }
 const roleLabel = { organizer: 'Organizer', administrator: 'Administrator', system_admin: 'System administrator' }
 const has = (user, role) => user?.roles.includes(role)
-const rosterPath = id => '/?view=rosters' + (id ? '&event=' + id : '')
+function rosterPath(id, page = 1) {
+  const params = new URLSearchParams({ view: 'rosters' })
+  if (id) params.set('event', String(id))
+  if (page > 1) params.set('page', String(page))
+  return '/?' + params
+}
 
 function Badge({ status }) {
   return <span className={'badge ' + status}>{statusLabel[status]}</span>
@@ -44,7 +49,7 @@ function Header({ user, view }) {
   </div></header>
 }
 
-function Empty({ title, children, heading: Heading = 'h3' }) {
+function Empty({ title, children, heading: Heading = 'h2' }) {
   return <div className="empty"><Heading>{title}</Heading>{children && <p>{children}</p>}</div>
 }
 
@@ -120,7 +125,7 @@ async function Explore({ params }) {
           ? <Empty title="No events found" heading={ResultHeading}>{page > 1
             ? <Link href={browsePath({ ...filters, page: 1 })}>Return to the first page of results</Link>
             : 'Try another keyword or change your filters.'}</Empty>
-          : <Empty title="No upcoming events">Published events will appear here.</Empty>}
+          : <Empty title="No upcoming events" heading={ResultHeading}>Published events will appear here.</Empty>}
       {(page > 1 || hasNext) && <nav className="pagination" aria-label="Event pages">
         {page > 1 && <Link className="button quiet" href={browsePath({ ...filters, page: page - 1 })}>Previous</Link>}
         <span>Page {page}</span>
@@ -185,7 +190,7 @@ async function EventForm({ event }) {
 
 async function EventDetail({ id, user, filters }) {
   const event = await getEvent(id,user)
-  if (!event) return <Empty title="Event unavailable">Check the event link or your access.</Empty>
+  if (!event) return <Empty title="Event unavailable" heading="h1">Check the event link or your access.</Empty>
   const owner = has(user,'organizer') && user.id === event.owner_id
   const administrator = has(user,'administrator')
   const published = event.status === 'published'
@@ -247,9 +252,9 @@ function RosterTable({ rows }) {
 async function Rosters({ user, id, page }) {
   if (id) {
     const data = await roster(id,user)
-    if (!data) return <Empty title="Roster unavailable">Check the event link and try again.</Empty>
+    if (!data) return <Empty title="Roster unavailable" heading="h1">Check the event link and try again.</Empty>
     return <>
-      <Link className="back" href={rosterPath()}>All event rosters</Link>
+      <Link className="back" href={rosterPath(null, page)}>Back to event rosters</Link>
       <PageHeading title={data.event.title} description={dateText(data.event.starts_at) + ' ET'}>
         <Badge status={data.event.status} />
       </PageHeading>
@@ -263,15 +268,15 @@ async function Rosters({ user, id, page }) {
     <PageHeading title="Event rosters" description="View registrations for drafts, pending approvals, and published events." />
     {rows.length ? <ul className="rows">{rows.slice(0,eventsPerPage).map(event =>
       <li key={event.id} className="row">
-        <div><Link href={rosterPath(event.id)} className="row-title">{event.title}</Link>
+        <div><Link href={rosterPath(event.id, page)} className="row-title">{event.title}</Link>
           <p>{dateText(event.starts_at)} ET</p></div>
         <Badge status={event.status} />
       </li>
     )}</ul> : <Empty title="No events on this page" />}
     {(page > 1 || rows.length > eventsPerPage) && <nav className="pagination" aria-label="Roster pages">
-      {page > 1 && <Link className="button quiet" href={rosterPath() + '&page=' + (page - 1)}>Previous</Link>}
+      {page > 1 && <Link className="button quiet" href={rosterPath(null, page - 1)}>Previous</Link>}
       <span>Page {page}</span>
-      {rows.length > eventsPerPage && <Link className="button quiet" href={rosterPath() + '&page=' + (page + 1)}>Next</Link>}
+      {rows.length > eventsPerPage && <Link className="button quiet" href={rosterPath(null, page + 1)}>Next</Link>}
     </nav>}
   </>
 }
@@ -399,7 +404,7 @@ export default async function Page({ searchParams }) {
   else if (view === 'login' || view === 'signup') content = <Auth signup={view === 'signup'} returnId={optionalId(params.eventReturn)} filters={browseFilters(params)} />
   else if (role && !has(user,role)) {
     await audit({ query }, user, view === 'rosters' && id ? 'roster_view' : 'page_view', view === 'rosters' && id ? id : view, 'denied')
-    content = user ? <Empty title="Access restricted">Your account doesn’t have access to this page.</Empty> : <Auth />
+    content = user ? <Empty title="Access restricted" heading="h1">Your account doesn’t have access to this page.</Empty> : <Auth />
   }
   else if (view === 'my') content = <MyEvents user={user} />
   else if (view === 'inbox') content = <Inbox user={user} />
