@@ -533,7 +533,9 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       assert.deepEqual(rows.map(row => [row.kind, row.account_id, row.message]), [
         ['confirmed', confirmed.id, `You’re registered for ${title}.`],
         ...waiting.map((user, index) => ['waitlisted', user.id, `You joined the waitlist for ${title} at position ${index + 1}.`]),
-        ...waiting.map(user => ['promoted', user.id, `A seat opened for ${title}. You’re confirmed.`])
+        ['promoted', waiting[0].id, `A seat opened for ${title}. You’re confirmed.`],
+        ['cancelled', confirmed.id, `Your registration for ${title} was cancelled.`],
+        ['promoted', waiting[1].id, `A seat opened for ${title}. You’re confirmed.`]
       ])
       for (const row of rows) {
         assert.ok(row.created_at instanceof Date)
@@ -542,7 +544,10 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
         assert.ok(delayMs >= 0 && delayMs < 5 * 60 * 1000)
       }
       const messages = (await inbox(confirmed)).rows.filter(row => row.event_id === eventId)
-      assert.deepEqual(messages.map(row => row.message), [`You’re registered for ${title}.`])
+      assert.deepEqual(messages.map(row => row.message), [
+        `Your registration for ${title} was cancelled.`,
+        `You’re registered for ${title}.`
+      ])
       await events.changeRegistration(confirmed, eventId, false)
       const { rows: [rejoined] } = await events.registration(confirmed, eventId)
       assert.equal(rejoined.status, 'waitlisted')

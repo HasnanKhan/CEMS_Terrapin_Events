@@ -86,11 +86,12 @@ GitHub Actions runs [the Next.js checks](.github/workflows/tests.yml) and [the S
 
 ### Registration and roster API
 
-Use a signed-in fictional account's `terrapin_session` cookie in Postman. For the registration request, set `Origin` to the exact base URL of the app, including its scheme and any nondefault port. Use the same event IDs shown in the app's event links.
+Use a signed-in fictional account's `terrapin_session` cookie in Postman. For registration and cancellation, set `Origin` to the exact base URL of the app, including its scheme and any nondefault port. Use the event ID from the app's event link to register and the registration ID from the HTTP 201 response to cancel.
 
 | Method and path | Role and result |
 | --- | --- |
 | `POST /api/events/{id}/registrations` | An attendee can register with an empty body. HTTP 201 returns the registration ID, status, and position for waitlisted attendees. |
+| `DELETE /api/registrations/{id}` | An attendee can cancel their own confirmed or waitlisted entry before the event starts. HTTP 200 returns the registration ID and its `cancelled` status. |
 | `GET /api/events/{id}/roster` | The owning organizer or an administrator can read the event summary and active roster. |
 
 Errors use the SADD JSON fields `timestamp`, `status`, `code`, `message`, `path`, and `fieldErrors`. An unpublished or closed event returns the generic registration-closed error with HTTP 422. The [API acceptance tests](tests/browser/mvp-api.spec.js) run against a disposable database.
