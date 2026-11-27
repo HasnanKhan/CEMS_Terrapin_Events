@@ -19,7 +19,15 @@ export default function Form({ action, target = null, destination = '/', childre
     if (state?.error) errorRef.current?.focus()
   }, [state])
 
-  return <form action={dispatch} data-action={action} onReset={action === "save" ? event => event.preventDefault() : undefined} className={compact ? 'action compact' : 'action'}>
+  function handleReset(event) {
+    if (action === 'save') event.preventDefault()
+    if (action === 'login' || action === 'signup') {
+      event.preventDefault()
+      event.currentTarget.elements.namedItem('password').value = ''
+    }
+  }
+
+  return <form action={dispatch} data-action={action} onReset={handleReset} className={compact ? 'action compact' : 'action'}>
     {children}
     {state?.error && <p className="error" role="alert" tabIndex={-1} ref={errorRef}>{state.error}</p>}
     <button className={'button ' + style} disabled={pending} aria-label={pending ? undefined : accessibleLabel}>{pending ? 'Working…' : label}</button>

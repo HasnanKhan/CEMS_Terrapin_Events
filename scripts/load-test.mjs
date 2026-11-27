@@ -112,9 +112,9 @@ async function extractForms(parser, html, action) {
     if (!form || form.getAttribute('method')?.toLowerCase() !== 'post' || form.getAttribute('action') !== '') {
       throw new Error(`Expected a same-page ${action} form in the test fixture.`)
     }
-    const fields = Array.from(form.querySelectorAll('input[type=hidden][name]'), input => [input.name, input.value])
-    if (!fields.length || fields.some(([name]) => !name.startsWith('$ACTION_'))) {
-      throw new Error('The Server Action fields were missing or the form requires extra inputs.')
+    const fields = Array.from(new FormData(form))
+    if (!fields.some(([name]) => name.startsWith('$ACTION_')) || fields.some(([, value]) => typeof value !== 'string')) {
+      throw new Error('Expected a Server Action form with text fields only.')
     }
     return fields
   }), { html, action })

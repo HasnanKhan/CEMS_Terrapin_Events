@@ -68,6 +68,8 @@ nav a[aria-current] { color: var(--red); text-decoration: underline; text-decora
 .section-count, .page-heading p { color: var(--muted); }
 .page-heading { margin-bottom: 1.7rem; }
 .page-heading p { margin-top: .65rem; }
+.back { display: inline-block; }
+.back + .page-heading { margin-top: .75rem; }
 .event-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1.15rem; }
 .event-card { background: white; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
 .card-banner { min-height: 108px; padding: .85rem; display: flex; align-items: end; background: repeating-linear-gradient(130deg,#daceee 0 3px,#ece3f6 3px 23px); }
