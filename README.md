@@ -84,6 +84,17 @@ npm run test:browser
 
 GitHub Actions runs [the Next.js checks](.github/workflows/tests.yml) and [the Spring checks](.github/workflows/spring-backend.yml). Spring CI exercises catalog reads, the shared-database registration journey, and the outage view. Failed browser runs retain traces for seven days. See the [load results](docs/load-verification.md) and [security and recovery record](docs/recovery-verification.md) for acceptance evidence.
 
+### Registration and roster API
+
+Use a signed-in fictional account's `terrapin_session` cookie in Postman. For the registration request, set `Origin` to the exact base URL of the app, including its scheme and any nondefault port. Use the same event IDs shown in the app's event links.
+
+| Method and path | Role and result |
+| --- | --- |
+| `POST /api/events/{id}/registrations` | An attendee can register with an empty body. HTTP 201 returns the registration ID, status, and position for waitlisted attendees. |
+| `GET /api/events/{id}/roster` | The owning organizer or an administrator can read the event summary and active roster. |
+
+Errors use the SADD JSON fields `timestamp`, `status`, `code`, `message`, `path`, and `fieldErrors`. The [API acceptance tests](tests/browser/mvp-api.spec.js) run against a disposable database.
+
 ## Deploy to Vercel and Neon
 
 1. Prepare a Neon database for the demo. Keep its owner URLs in your local settings and apply the schema with `npm run db:setup`.
@@ -99,11 +110,14 @@ Run `npm run db:provision-runtime` once after schema setup. It uses the locally 
 
 The Next.js `terrapin_runtime` login can append audit records. Audit reads and mutations and schema creation are denied. Apply [the role grants](lib/runtime-grants.sql) as the database owner.
 
+For an existing deployment, apply the schema and the updated registration grants to each environment before releasing the new registration code. The migration preserves existing rows. After rollout, revoke the runtime role's old `DELETE` grant on `public.registrations`. Roll forward from this release to preserve cancellation history.
+
 ## Operations and release readiness
 
 - **Sessions.** Session tokens are stored as hashes. A session expires after 30 minutes idle or 12 hours since sign-in. Apply schema updates before deploying.
 - **Request limits.** Limits per rolling minute are five signup attempts and 20 sign-in attempts per trusted Vercel client IP, plus 10 registration or cancellation attempts per account. Requests without a trusted IP share a fallback bucket. Set `SELF_SIGNUP_ENABLED=false` and redeploy to pause public signup.
-- **Registration integrity.** Registration, cancellation, and capacity changes use the same PostgreSQL event lock. Seat changes, waitlist promotions, and inbox records commit together.
+- **Registration integrity.** Registration, cancellation, and capacity changes use the same PostgreSQL event row lock with a 1.5-second timeout. Cancellation retains its row and timestamp. Seat changes, waitlist promotions, and inbox records commit together.
+- **Daily cleanup.** Set a random server-only `CRON_SECRET` in the Vercel Production environment before deploying. Vercel calls the cleanup route once a day during the 09:00 UTC hour. Each call removes up to 1,000 expired sessions and 1,000 rate-limit counters inactive for over an hour. Verify the first successful invocation in the Vercel logs. [Vercel cron setup](https://vercel.com/docs/cron-jobs/manage-cron-jobs)
 - **Audit and recovery.** Retain audit history for at least a year and monitor daily backups. Record restore time and data loss from an isolated restore drill.
 - **Readiness.** Next.js `GET /api/health` returns HTTP 200 when it can reach PostgreSQL and HTTP 503 when it cannot. Staging Spring readiness is checked separately. Set a monitoring interval that fits the database compute budget.
 - **Release checks.** Pull requests into `main` require the PostgreSQL and Chromium check and the Java 21 and PostgreSQL check. The [GitHub ruleset definition](.github/main-release-ruleset.json) records the required jobs and branch protections. Preview deploys use the separate `pr-preview` Neon branch with a restricted runtime login. Apply Preview schema changes from a maintenance environment.
