@@ -77,7 +77,7 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
 
     const event = new URL(page.url())
     event.searchParams.delete('feedback')
-    await test.step('FR-1–9, FR-26–33, FR-37, FR-39–40: signup, register, and promote from the waitlist', async () => {
+    await test.step('FR-1–9, FR-24, FR-26–33, FR-37, FR-39–40: view event details, sign up, register, and promote from the waitlist', async () => {
       const search = new URL('/?q=' + encodeURIComponent(title) + '&category=Academic', event)
       await first.goto(search.href)
       const eventLink = first.getByRole('link', { name: title, exact: true })
@@ -85,9 +85,19 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
       const fromResults = new URL(await eventLink.getAttribute('href'), search)
       await signUpForEvent(first, fromResults.href, `browser-first-${id}@umd.edu`)
       await expect(first.getByRole('heading', { name: title })).toBeVisible()
+      await expect(first.getByText('Academic', { exact: true })).toBeVisible()
       await expect(first.getByText('Hosted by Browser Test')).toBeVisible()
       await expect(first.getByText('End-to-end browser verification')).toBeVisible()
-      await expect(first.getByText('Registration deadline', { exact: true })).toBeVisible()
+      const fact = (page, label) => page.locator('.facts > div')
+        .filter({ has: page.getByText(label, { exact: true }) }).locator('dd')
+      const displayDate = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', dateStyle: 'medium' })
+        .format(new Date(day + 'T00:00:00Z'))
+      await expect(fact(first, 'Starts')).toHaveText(displayDate + ', 5:00 PM ET')
+      await expect(fact(first, 'Ends')).toHaveText(displayDate + ', 6:00 PM ET')
+      await expect(fact(first, 'Venue')).toHaveText('Iribe Center')
+      await expect(fact(first, 'Registration deadline')).toHaveText(displayDate + ', 4:00 PM ET')
+      await expect(fact(first, 'Seats remaining')).toHaveText('1 of 1')
+      await expect(fact(first, 'On the waitlist')).toHaveText('0')
       await expect(first.getByText('1 seat open', { exact: true })).toBeVisible()
       expect(await first.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
       await first.getByRole('button', { name: 'Register for event' }).click()
@@ -101,6 +111,8 @@ test('creates and approves a draft, then registers, waitlists, and promotes thro
       await signUpForEvent(second, event.href, `browser-second-${id}@umd.edu`)
       await second.getByRole('button', { name: 'Join waitlist' }).click()
       await expect(second.getByRole('status')).toHaveText('You joined the waitlist at position 1.')
+      await expect(fact(second, 'Seats remaining')).toHaveText('0 of 1')
+      await expect(fact(second, 'On the waitlist')).toHaveText('1')
       const confirmation = `You’re registered for ${title}.`
       const joinedWaitlist = `You joined the waitlist for ${title} at position 1.`
       await first.getByRole('link', { name: 'Inbox', exact: true }).click()

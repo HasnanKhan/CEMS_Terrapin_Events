@@ -12,6 +12,7 @@ async function withFixtures(run) {
   const marker = randomUUID()
   const accounts = []
   const events = []
+  const cancellationTargets = []
   async function createAccounts(roles) {
     const seeds = roles.map((assignedRoles, index) => ({
       name: 'API fixture ' + index,
@@ -43,14 +44,15 @@ async function withFixtures(run) {
   }
 
   try {
-    await run({ db, createAccounts, createEvent })
+    await run({ db, createAccounts, createEvent, cancellationTargets })
   } finally {
     try {
       const ids = accounts.map(account => account.id)
       await db.query('delete from notifications where event_id=any($1)', [events])
       await db.query('delete from registrations where event_id=any($1)', [events])
       await db.query(`delete from audit_entries where actor_id=any($1)
-        or (action in ('registration_create','roster_view') and target=any($2))`, [ids, events.map(String)])
+        or (action in ('registration_create','roster_view') and target=any($2))
+        or (action='registration_cancel' and target=any($3))`, [ids, events.map(String), cancellationTargets.map(String)])
       await db.query("delete from rate_limits where scope='registration' and subject=any($1)", [ids.map(id => tokenHash(String(id)))])
       await db.query('delete from events where id=any($1)', [events])
       await db.query('delete from accounts where id=any($1)', [ids])
@@ -205,5 +207,80 @@ test('registration exposes safe API errors and requires a same-origin authentica
     expect(await response.json()).toEqual({ id: expect.any(Number), status: 'confirmed' })
     await expectError(await register(request, baseURL, event.id, attendee), 409, 'DUPLICATE_REGISTRATION')
     expect((await db.query('select id from registrations where event_id=$1', [event.id])).rowCount).toBe(1)
+  })
+})
+
+test('REST cancellation retains history, promotes in order, and protects replacement registrations', async ({ request, baseURL }) => {
+  await withFixtures(async ({ db, createAccounts, createEvent, cancellationTargets }) => {
+    const [owner, confirmed, firstWaiting, lastWaiting] = await createAccounts([
+      organizerRoles, attendeeRoles, attendeeRoles, attendeeRoles
+    ])
+    const event = await createEvent(owner)
+    const ids = []
+    for (const actor of [confirmed, firstWaiting, lastWaiting]) {
+      const response = await register(request, baseURL, event.id, actor)
+      expect(response.status()).toBe(201)
+      ids.push((await response.json()).id)
+    }
+    const [seatId, firstId, lastId] = ids
+    cancellationTargets.push(...ids)
+    const origin = new URL(baseURL).origin
+    const cancel = (id, actor, headers = { Origin: origin }) => request.delete(`/api/registrations/${id}`, {
+      headers: { ...session(actor), ...headers }
+    })
+
+    await expectError(await cancel(seatId, null), 401, 'AUTHENTICATION_REQUIRED')
+    await expectError(await cancel(seatId, owner), 403, 'ACCESS_DENIED')
+    await expectError(await cancel(seatId, confirmed, {}), 403, 'ACCESS_DENIED')
+    await expectError(await cancel(seatId, confirmed, { Origin: 'https://example.invalid' }), 403, 'ACCESS_DENIED')
+    await expectError(await cancel('0', confirmed), 400, 'VALIDATION_FAILED')
+    await expectError(await cancel(2147483647, confirmed), 404, 'NOT_FOUND')
+    const { rows: before } = await db.query('select id,status,cancelled_at from registrations where event_id=$1 order by id', [event.id])
+    expect(before).toEqual([
+      { id: seatId, status: 'confirmed', cancelled_at: null },
+      { id: firstId, status: 'waitlisted', cancelled_at: null },
+      { id: lastId, status: 'waitlisted', cancelled_at: null }
+    ])
+    const { rows: denials } = await db.query(`select actor_id,outcome from audit_entries
+      where action='registration_cancel' and target=$1 order by id`, [String(seatId)])
+    expect(denials).toEqual([null, owner.id, null, null].map(actor_id => ({ actor_id, outcome: 'denied' })))
+
+    const cancelled = await cancel(seatId, confirmed)
+    expect(cancelled.status()).toBe(200)
+    expect(cancelled.headers()['cache-control']).toBe('no-store')
+    expect(await cancelled.json()).toEqual({ id: seatId, status: 'cancelled' })
+    const { rows: after } = await db.query('select id,status,cancelled_at from registrations where event_id=$1 order by id', [event.id])
+    expect(after).toEqual([
+      { id: seatId, status: 'cancelled', cancelled_at: expect.any(Date) },
+      { id: firstId, status: 'confirmed', cancelled_at: null },
+      { id: lastId, status: 'waitlisted', cancelled_at: null }
+    ])
+    const { rows: promotions } = await db.query(`select account_id from notifications
+      where event_id=$1 and kind='promoted'`, [event.id])
+    expect(promotions).toEqual([{ account_id: firstWaiting.id }])
+
+    const newEntry = await register(request, baseURL, event.id, confirmed)
+    expect(newEntry.status()).toBe(201)
+    const { id: replacementId } = await newEntry.json()
+    expect(replacementId).not.toBe(seatId)
+    await expectError(await cancel(seatId, confirmed), 409, 'INVALID_STATE_TRANSITION')
+    const removedWaitlistEntry = await cancel(lastId, lastWaiting)
+    expect(removedWaitlistEntry.status()).toBe(200)
+    expect(await removedWaitlistEntry.json()).toEqual({ id: lastId, status: 'cancelled' })
+    expect((await db.query('select status from registrations where id=$1', [replacementId])).rows)
+      .toEqual([{ status: 'waitlisted' }])
+    expect((await db.query("select account_id from notifications where event_id=$1 and kind='promoted'", [event.id])).rows)
+      .toEqual(promotions)
+    expect((await db.query("select account_id,message from notifications where event_id=$1 and kind='cancelled' order by id",
+      [event.id])).rows).toEqual([
+      { account_id: confirmed.id, message: `Your registration for ${event.title} was cancelled.` },
+      { account_id: lastWaiting.id, message: `You left the waitlist for ${event.title}.` }
+    ])
+
+    await db.query(`update events set starts_at=now()-interval '1 hour',deadline=now()-interval '1 hour'
+      where id=$1`, [event.id])
+    await expectError(await cancel(firstId, firstWaiting), 422, 'REGISTRATION_CLOSED')
+    expect((await db.query('select status from registrations where id=$1', [firstId])).rows)
+      .toEqual([{ status: 'confirmed' }])
   })
 })
