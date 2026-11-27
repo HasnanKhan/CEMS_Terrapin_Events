@@ -1,7 +1,11 @@
 import Link from 'next/link'
 import { accountDirectory, audit, currentUser, extraRoles, selfSignupEnabled } from '../lib/auth.js'
 import { query } from '../lib/db.js'
-import { approvalOwners, approvalQueue, categories, eventsPerPage, getEvent, organizerEvents, publicEvents, registration, registrations, roster, rosterEvents, venues } from '../lib/events.js'
+import { eventsPerPage, getEvent, publicEvents } from '../lib/catalog/service.js'
+import { approvalOwners, approvalQueue, categories, organizerEvents } from '../lib/event/service.js'
+import { inbox } from '../lib/notification/service.js'
+import { registration, registrations, roster, rosterEvents } from '../lib/registration/service.js'
+import { venues } from '../lib/venue/service.js'
 import { optionalId } from '../lib/input.js'
 import { springDirectory, SpringCatalogUnavailable } from '../lib/spring-catalog.js'
 import { actionFeedback } from './feedback.js'
@@ -359,7 +363,7 @@ async function MyEvents({ user }) {
 }
 
 async function Inbox({ user }) {
-  const { rows } = await query('select * from notifications where account_id=$1 order by id desc limit 100', [user.id])
+  const { rows } = await inbox(user)
   return <><PageHeading title="Inbox" description="Registration and waitlist updates appear here." />
     {rows.length ? <ul className="rows">{rows.map(item => <li key={item.id} className="row"><div>
       <Link className="row-title" href={eventPath(item.event_id)}>{item.message}</Link><p>{dateText(item.delivered_at)} ET</p>

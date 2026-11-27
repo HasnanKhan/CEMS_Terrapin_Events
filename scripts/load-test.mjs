@@ -157,7 +157,7 @@ function measurement(samples, limit) {
 }
 
 async function verifyRoster(parser, path) {
-  const { rows: initial } = await pool.query(`select account_id,status from registrations where event_id=$1 order by id`, [eventId])
+  const { rows: initial } = await pool.query(`select account_id,status from registrations where event_id=$1 and status in ('confirmed','waitlisted') order by id`, [eventId])
   assert.equal(initial.length, users, 'A registration was lost or duplicated.')
   assert.deepEqual(new Set(initial.map(row => row.account_id)), new Set(attendees.map(user => user.id)), 'Registrations did not match the simulated attendees.')
   assert.deepEqual(initial.map(row => row.status), [
@@ -175,7 +175,7 @@ async function verifyRoster(parser, path) {
     const user = attendees.find(item => item.id === initial[i].account_id)
     const [fields] = await extractForms(parser, [await page(path, user)], 'cancel')
     await submitForm(path, user, fields)
-    const { rows: current } = await pool.query(`select account_id,status from registrations where event_id=$1 order by id`, [eventId])
+    const { rows: current } = await pool.query(`select account_id,status from registrations where event_id=$1 and status in ('confirmed','waitlisted') order by id`, [eventId])
     assert.equal(current.length, users - i - 1)
     assert.equal(current.filter(row => row.status === 'confirmed').length, capacity)
     assert.ok(!current.some(row => row.account_id === user.id))

@@ -16,7 +16,13 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
   process.env.VERCEL = '1'
   process.env.SELF_SIGNUP_ENABLED = 'true'
   const auth = await import('../lib/auth.js')
-  const events = await import('../lib/events.js')
+  const { inbox } = await import('../lib/notification/service.js')
+  const events = {
+    ...await import('../lib/event/service.js'),
+    ...await import('../lib/catalog/service.js'),
+    ...await import('../lib/registration/service.js'),
+    ...await import('../lib/venue/service.js')
+  }
 
   const marker = randomBytes(3).toString('hex')
   const ip = '2001:db8::' + marker.slice(0, 4) + ':' + marker.slice(4)
@@ -468,7 +474,7 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
         { actor: otherOrganizer, action: 'draft_save', target: draft, attempt: () => events.saveDraft(otherOrganizer, draft, form(details)) },
         { actor: otherOrganizer, action: 'submit', target: draft, attempt: () => events.changeEvent(otherOrganizer, draft, 'submit', form({})) },
         { actor: owner, action: 'approve', target: pending, attempt: () => events.changeEvent(owner, pending, 'approve', form({})) },
-        { actor: attendee, action: 'capacity', target: eventId, attempt: () => events.changeEvent(attendee, eventId, 'capacity', form({ capacity: '2' })) },
+        { actor: attendee, action: 'capacity', target: eventId, attempt: () => events.updateCapacity(attendee, eventId, form({ capacity: '2' })) },
         { actor: null, action: 'registration_create', target: eventId, attempt: () => events.changeRegistration(null, eventId, false) },
         { actor: null, action: 'registration_cancel', target: eventId, attempt: () => events.changeRegistration(null, eventId, true) },
         { actor: reviewer, action: 'account_update', target: attendee.id, attempt: () => auth.updateAccount(reviewer, attendee.id, form({ active: 'on', role: 'organizer' })) }
@@ -507,13 +513,19 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
       }
       await assert.rejects(events.changeRegistration(confirmed, eventId, false), /already have/)
       await assert.rejects(events.changeRegistration(waiting[0], eventId, false), /already have/)
-      await assert.rejects(events.changeEvent(organizer, eventId, 'capacity', form({ capacity: '999' })), /fit the venue/)
+      await assert.rejects(events.updateCapacity(organizer, eventId, form({ capacity: '999' })), /fit the venue/)
+      const { rows: [original] } = await events.registration(confirmed, eventId)
       await events.changeRegistration(confirmed, eventId, true)
+      const { rows: [cancelled] } = await query('select status,cancelled_at from registrations where id=$1', [original.id])
+      assert.equal(cancelled.status, 'cancelled')
+      assert.ok(cancelled.cancelled_at instanceof Date)
+      assert.equal((await events.registration(confirmed, eventId)).rowCount, 0)
+      assert.ok(!(await events.roster(eventId, administrator)).rows.some(row => row.email === confirmed.email))
       assert.equal((await events.registrations(waiting[0])).rows[0].status, 'confirmed')
       assert.equal((await events.registration(waiting[1], eventId)).rows[0].position, 1)
-      await events.changeEvent(organizer, eventId, 'capacity', form({ capacity: '2' }))
+      await events.updateCapacity(organizer, eventId, form({ capacity: '2' }))
       assert.equal((await events.registration(waiting[1], eventId)).rows[0].status, 'confirmed')
-      await assert.rejects(events.changeEvent(organizer, eventId, 'capacity', form({ capacity: '1' })), /cover all confirmed/)
+      await assert.rejects(events.updateCapacity(organizer, eventId, form({ capacity: '1' })), /cover all confirmed/)
       assert.equal((await events.getEvent(eventId, organizer)).capacity, 2)
       const { rows } = await query(`select kind, account_id, message, created_at, delivered_at
         from notifications where event_id=$1 order by id`, [eventId])
@@ -529,9 +541,17 @@ test('prototype workflows with PostgreSQL', { skip: !process.env.TEST_DATABASE_U
         const delayMs = row.delivered_at - row.created_at
         assert.ok(delayMs >= 0 && delayMs < 5 * 60 * 1000)
       }
+      const messages = (await inbox(confirmed)).rows.filter(row => row.event_id === eventId)
+      assert.deepEqual(messages.map(row => row.message), [`You’re registered for ${title}.`])
       await events.changeRegistration(confirmed, eventId, false)
-      assert.equal((await events.registration(confirmed, eventId)).rows[0].status, 'waitlisted')
+      const { rows: [rejoined] } = await events.registration(confirmed, eventId)
+      assert.equal(rejoined.status, 'waitlisted')
+      assert.equal(rejoined.cancelled_at, null)
+      assert.ok(rejoined.id > original.id)
       await events.changeRegistration(confirmed, eventId, true)
+      const { rows: [cancelledAgain] } = await query('select status,cancelled_at from registrations where id=$1', [rejoined.id])
+      assert.equal(cancelledAgain.status, 'cancelled')
+      assert.ok(cancelledAgain.cancelled_at instanceof Date)
       assert.equal((await events.registration(confirmed, eventId)).rowCount, 0)
       assert.equal((await events.getEvent(eventId, organizer)).confirmed, 2)
       await query("update events set deadline=now()-interval '1 second' where id=$1", [eventId])
