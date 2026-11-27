@@ -93,7 +93,7 @@ Use a signed-in fictional account's `terrapin_session` cookie in Postman. For th
 | `POST /api/events/{id}/registrations` | An attendee can register with an empty body. HTTP 201 returns the registration ID, status, and position for waitlisted attendees. |
 | `GET /api/events/{id}/roster` | The owning organizer or an administrator can read the event summary and active roster. |
 
-Errors use the SADD JSON fields `timestamp`, `status`, `code`, `message`, `path`, and `fieldErrors`. The [API acceptance tests](tests/browser/mvp-api.spec.js) run against a disposable database.
+Errors use the SADD JSON fields `timestamp`, `status`, `code`, `message`, `path`, and `fieldErrors`. An unpublished or closed event returns the generic registration-closed error with HTTP 422. The [API acceptance tests](tests/browser/mvp-api.spec.js) run against a disposable database.
 
 ## Deploy to Vercel and Neon
 
@@ -110,7 +110,7 @@ Run `npm run db:provision-runtime` once after schema setup. It uses the locally 
 
 The Next.js `terrapin_runtime` login can append audit records. Audit reads and mutations and schema creation are denied. Apply [the role grants](lib/runtime-grants.sql) as the database owner.
 
-For an existing deployment, apply the schema and the updated registration grants to each environment before releasing the new registration code. The migration preserves existing rows. After rollout, revoke the runtime role's old `DELETE` grant on `public.registrations`. Roll forward from this release to preserve cancellation history.
+For an existing deployment, apply the schema and the updated registration grants to each environment before releasing the new registration code. The migration preserves existing rows. Revoke the runtime role's old `DELETE` grant on `public.registrations` before making the new deployment available. This briefly pauses cancellations on the old deployment and protects cancellation history throughout the cutover. Use a release that supports retained cancellations for any subsequent rollback.
 
 ## Operations and release readiness
 
